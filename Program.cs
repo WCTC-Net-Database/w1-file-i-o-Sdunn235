@@ -2,6 +2,11 @@
 /// The code has since been reviewed, tested, and modified to ensure it works as intended.
 /// Moving forward, testing and modifications will be self-directed.
 
+using System.Globalization;
+using System.Linq;
+using CsvHelper;
+using CsvHelper.Configuration;
+
 /// <summary>
 /// Week 1: File I/O Basics - Console RPG Character Manager
 ///
@@ -23,6 +28,13 @@ class Program
 {
     // The path to our data file - we'll read and write character data here
     static string filePath = "input.csv";
+
+    // CsvHelper configuration: no header row in the CSV
+    static readonly CsvConfiguration CsvConfig = new(CultureInfo.InvariantCulture)
+    {
+        HasHeaderRecord = false,
+        TrimOptions = TrimOptions.Trim
+    };
 
     static void Main()
     {
@@ -97,30 +109,18 @@ class Program
     /// </summary>
     static void DisplayAllCharacters()
     {
-        // Read all lines from the file into a string array
-        string[] lines = File.ReadAllLines(filePath);
+        List<Character> characters = ReadCharacters();
 
-        // Loop through each line and parse the CSV data
-        foreach (string line in lines)
+        // Display each character's information with clear formatting
+        foreach (Character character in characters)
         {
-            // Split() separates the CSV line by commas into individual field values
-            string[] parts = line.Split(',');
-
-            // Extract each field from the array using index positions
-            string name = parts[0];
-            string characterClass = parts[1];
-            string level = parts[2];
-            string hp = parts[3];
-            string equipment = parts[4];
-
-            // Display each character's information with clear formatting
-            Console.WriteLine($"Name: {name}");
-            Console.WriteLine($"Class: {characterClass}");
-            Console.WriteLine($"Level: {level}");
-            Console.WriteLine($"HP: {hp}");
+            Console.WriteLine($"Name: {character.Name}");
+            Console.WriteLine($"Class: {character.Class}");
+            Console.WriteLine($"Level: {character.Level}");
+            Console.WriteLine($"HP: {character.Hp}");
 
             // Split equipment by '|' pipe character and rejoin with commas for display
-            string[] equipmentItems = equipment.Split('|');
+            string[] equipmentItems = character.Equipment.Split('|');
             Console.WriteLine($"Equipment: {string.Join(", ", equipmentItems)}");
             Console.WriteLine("-------------------------");
         }
@@ -155,13 +155,18 @@ class Program
         Console.Write("Enter equipment (separated by |, e.g., sword|shield): ");
         string? equipment = Console.ReadLine();
 
-        // Format all fields as a single CSV line using string interpolation
-        string newLine = $"{name},{characterClass},{level},{hp},{equipment}";
+        // Load existing records, append the new one, and write the file back out
+        List<Character> characters = ReadCharacters();
+        characters.Add(new Character
+        {
+            Name = name ?? string.Empty,
+            Class = characterClass ?? string.Empty,
+            Level = int.TryParse(level, out int lvl) ? lvl : 1,
+            Hp = int.TryParse(hp, out int health) ? health : 0,
+            Equipment = equipment ?? string.Empty
+        });
 
-        // Append the new character line to the file with a newline separator
-        // AppendAllText() preserves existing data instead of overwriting it
-        // Add newline BEFORE the new character to ensure it starts on a fresh line
-        File.AppendAllText(filePath, "\n" + newLine);
+        WriteCharacters(characters);
 
         Console.WriteLine($"\nCharacter '{name}' has been added successfully!");
     }
@@ -186,38 +191,19 @@ class Program
         Console.Write("Enter character name to level up: ");
         string? nameToFind = Console.ReadLine();
 
-        // Load all character records from file into a modifiable string array
-        string[] lines = File.ReadAllLines(filePath);
+        // Load all character records from file into a modifiable list
+        List<Character> characters = ReadCharacters();
         bool characterFound = false;
 
-        // Use index-based loop to enable modification of array elements
-        for (int i = 0; i < lines.Length; i++)
+        foreach (Character character in characters)
         {
-            // Split the CSV line to extract individual fields
-            string[] parts = lines[i].Split(',');
-            string name = parts[0];
-
             // Compare character names (case-insensitive for better UX)
-            // Equals() with OrdinalIgnoreCase makes "john" match "John"
-            if (name.Equals(nameToFind, StringComparison.OrdinalIgnoreCase))
+            if (character.Name.Equals(nameToFind, StringComparison.OrdinalIgnoreCase))
             {
                 characterFound = true;
-
-                // Extract all fields from the parsed CSV line
-                string characterClass = parts[1];
-                // Parse level as integer to perform arithmetic operation
-                int currentLevel = int.Parse(parts[2]);
-                string hp = parts[3];
-                string equipment = parts[4];
-
-                // Increment level by 1
-                int newLevel = currentLevel + 1;
-
-                // Rebuild the CSV line with the updated level and store in array
-                // This modifies the array in-memory without affecting the file yet
-                lines[i] = $"{name},{characterClass},{newLevel},{hp},{equipment}";
-
-                Console.WriteLine($"\n'{name}' has been leveled up from Level {currentLevel} to Level {newLevel}!");
+                int currentLevel = character.Level;
+                character.Level = currentLevel + 1;
+                Console.WriteLine($"\n'{character.Name}' has been leveled up from Level {currentLevel} to Level {character.Level}!");
             }
         }
 
@@ -228,8 +214,57 @@ class Program
             return;
         }
 
-        // Write the modified array back to file, permanently saving the change
-        // WriteAllLines() overwrites the entire file with the updated content
-        File.WriteAllLines(filePath, lines);
+        // Write the modified list back to file, permanently saving the change
+        WriteCharacters(characters);
+    }
+
+    /// <summary>
+    /// Reads all characters from the CSV file using CsvHelper.
+    /// </summary>
+    static List<Character> ReadCharacters()
+    {
+        if (!File.Exists(filePath))
+        {
+            return new List<Character>();
+        }
+
+        using StreamReader reader = new(filePath);
+        using CsvReader csv = new(reader, CsvConfig);
+        csv.Context.RegisterClassMap<CharacterMap>();
+        return csv.GetRecords<Character>().ToList();
+    }
+
+    /// <summary>
+    /// Writes all characters to the CSV file using CsvHelper.
+    /// </summary>
+    static void WriteCharacters(IEnumerable<Character> characters)
+    {
+        using StreamWriter writer = new(filePath, false);
+        using CsvWriter csv = new(writer, CsvConfig);
+        csv.Context.RegisterClassMap<CharacterMap>();
+        csv.WriteRecords(characters);
+    }
+}
+
+class Character
+{
+    public string Name { get; set; } = string.Empty;
+    public string Class { get; set; } = string.Empty;
+    public int Level { get; set; }
+    public int Hp { get; set; }
+    public string Equipment { get; set; } = string.Empty;
+}
+
+sealed class CharacterMap : ClassMap<Character>
+{
+    public CharacterMap()
+    {
+        // CsvHelper uses these mappings to match CSV column positions to Character properties.
+        // Index(0) is the first column, Index(1) is the second, etc. This is used for both read and write.
+        Map(m => m.Name).Index(0);
+        Map(m => m.Class).Index(1);
+        Map(m => m.Level).Index(2);
+        Map(m => m.Hp).Index(3);
+        Map(m => m.Equipment).Index(4);
     }
 }
