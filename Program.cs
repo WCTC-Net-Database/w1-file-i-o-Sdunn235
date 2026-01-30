@@ -1,10 +1,6 @@
-/// <summary>
 /// *Disclosure*: This project was initially set up using AI assistance as part of a Week 2 learning exercise.
 /// The code has since been reviewed, tested, and modified to ensure it works as intended.
 /// Moving forward, testing and modifications will be self-directed.
-/// Note: In real-world scenarios, development often involves modifying existing codebases rather than writing from scratch.
-/// </summary>
-
 
 /// <summary>
 /// Week 1: File I/O Basics - Console RPG Character Manager
