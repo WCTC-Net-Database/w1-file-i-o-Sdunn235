@@ -1,14 +1,20 @@
 /// <summary>
 /// Week 1: File I/O Basics - Console RPG Character Manager
 ///
-/// This program teaches fundamental file operations in C#:
+/// This program demonstrates fundamental file operations in C#:
 /// - Reading data from CSV files using File.ReadAllLines()
 /// - Parsing comma-separated values using String.Split()
-/// - Writing data back to files using File.WriteAllLines()
+/// - Writing and appending data to files using File.WriteAllLines() and File.AppendAllText()
 ///
-/// The menu structure is provided for you to review and understand.
-/// Your tasks are marked with TODO comments throughout the code.
+/// Features implemented:
+/// 1. Display all characters from CSV file with formatted output
+/// 2. Add new characters by collecting user input and appending to file
+/// 3. Level up existing characters by modifying and rewriting file data
 /// </summary>
+
+/// *Disclosure*: The basis of this code was created by an AI language model VS Code Claude Haiku 4.5.
+/// It has been reviewed and enhanced by a human developer to ensure accuracy and clarity.
+
 class Program
 {
     // The path to our data file - we'll read and write character data here
@@ -29,7 +35,7 @@ class Program
 
             // Get user's choice
             Console.Write("\nEnter your choice: ");
-            string choice = Console.ReadLine();
+            string? choice = Console.ReadLine();
 
             // Process the user's choice using a switch statement
             switch (choice)
@@ -76,112 +82,150 @@ class Program
     }
 
     /// <summary>
-    /// Reads all characters from the CSV file and displays them.
-    ///
-    /// TODO: Complete this method to:
-    /// 1. Read all lines from the file using File.ReadAllLines()
-    /// 2. Loop through each line
-    /// 3. Split each line by comma to get individual fields
-    /// 4. Display the character information in a readable format
-    ///
-    /// CSV Format: Name,Class,Level,HP,Equipment
-    /// Example: John,Fighter,1,10,sword|shield|potion
+    /// Reads all characters from the CSV file and displays them in a formatted list.
+    /// 
+    /// Implementation:
+    /// - File.ReadAllLines() loads entire CSV file into a string array
+    /// - Each line is split by comma using Split(',') to extract individual fields
+    /// - Fields are indexed: Name(0), Class(1), Level(2), HP(3), Equipment(4)
+    /// - Equipment items are further split by '|' and joined with commas for readability
+    /// - Each character is displayed with formatted console output
     /// </summary>
     static void DisplayAllCharacters()
     {
-        Console.WriteLine("\n=== All Characters ===\n");
-
-        // Step 1: Read all lines from the file
-        // File.ReadAllLines() returns a string array where each element is one line
+        // Read all lines from the file into a string array
         string[] lines = File.ReadAllLines(filePath);
 
-        // Step 2: Loop through each line and display it
-        // TODO: Instead of just printing the raw line, parse it and display nicely
-        //
-        // HINTS:
-        // - Use line.Split(',') to separate the fields
-        // - The fields are: Name (index 0), Class (1), Level (2), HP (3), Equipment (4)
-        // - Equipment contains multiple items separated by '|'
-        // - You can split equipment with: equipmentField.Split('|')
-        //
-        // Example output format:
-        // Name: John
-        // Class: Fighter
-        // Level: 1
-        // HP: 10
-        // Equipment: sword, shield, potion
-        // -------------------------
-
+        // Loop through each line and parse the CSV data
         foreach (string line in lines)
         {
-            // Currently just displays the raw CSV line
-            // TODO: Parse the line and display formatted output
-            Console.WriteLine(line);
+            // Split() separates the CSV line by commas into individual field values
+            string[] parts = line.Split(',');
+            
+            // Extract each field from the array using index positions
+            string name = parts[0];
+            string characterClass = parts[1];
+            string level = parts[2];
+            string hp = parts[3];
+            string equipment = parts[4];
+            
+            // Display each character's information with clear formatting
+            Console.WriteLine($"Name: {name}");
+            Console.WriteLine($"Class: {characterClass}");
+            Console.WriteLine($"Level: {level}");
+            Console.WriteLine($"HP: {hp}");
+            
+            // Split equipment by '|' pipe character and rejoin with commas for display
+            string[] equipmentItems = equipment.Split('|');
+            Console.WriteLine($"Equipment: {string.Join(", ", equipmentItems)}");
+            Console.WriteLine("-------------------------");
         }
     }
 
     /// <summary>
-    /// Prompts the user for character information and adds it to the file.
-    ///
-    /// TODO: Complete this method to:
-    /// 1. Prompt the user for: Name, Class, Level, HP, Equipment
-    /// 2. Format the data as a CSV line
-    /// 3. Append the new line to the file
-    ///
-    /// HINT: Use File.AppendAllText(filePath, newLine + "\n") to add to the file
+    /// Prompts the user for character information and appends it to the CSV file.
+    /// 
+    /// Implementation:
+    /// - Collects Name, Class, Level, HP, and Equipment from user via Console.ReadLine()
+    /// - Uses string interpolation ($"") to format the CSV line
+    /// - File.AppendAllText() adds the new line without overwriting existing data
+    /// - Adds newline character (\n) to separate records in the file
     /// </summary>
     static void AddCharacter()
     {
         Console.WriteLine("\n=== Add New Character ===\n");
 
-        // TODO: Prompt for character details
-        // Example:
-        // Console.Write("Enter character name: ");
-        // string name = Console.ReadLine();
-        // ... continue for other fields ...
+        // Collect all character information from user input
+        Console.Write("Enter character name: ");
+        string? name = Console.ReadLine();
+        
+        Console.Write("Enter character class: ");
+        string? characterClass = Console.ReadLine();
+        
+        Console.Write("Enter character level: ");
+        string? level = Console.ReadLine();
+        
+        Console.Write("Enter character HP: ");
+        string? hp = Console.ReadLine();
+        
+        Console.Write("Enter equipment (separated by |, e.g., sword|shield): ");
+        string? equipment = Console.ReadLine();
 
-        // TODO: Format as CSV line
-        // string newLine = $"{name},{characterClass},{level},{hp},{equipment}";
+        // Format all fields as a single CSV line using string interpolation
+        string newLine = $"{name},{characterClass},{level},{hp},{equipment}";
 
-        // TODO: Append to file
-        // File.AppendAllText(filePath, newLine + "\n");
-
-        Console.WriteLine("TODO: Implement character creation");
+        // Append the new character line to the file with a newline separator
+        // AppendAllText() preserves existing data instead of overwriting it
+        // Add newline BEFORE the new character to ensure it starts on a fresh line
+        File.AppendAllText(filePath, "\n" + newLine);
+        
+        Console.WriteLine($"\nCharacter '{name}' has been added successfully!");
     }
 
     /// <summary>
-    /// Finds a character by name and increases their level by 1.
-    ///
-    /// TODO: Complete this method to:
-    /// 1. Prompt for the character's name
-    /// 2. Read all lines from the file
-    /// 3. Find the line containing that character
-    /// 4. Parse the line, increase the level, rebuild the line
-    /// 5. Write all lines back to the file
-    ///
-    /// This is more challenging because you need to modify existing data!
-    ///
-    /// HINT: You'll need to:
-    /// - Read all lines into an array
-    /// - Loop through to find the matching character
-    /// - Modify that line (parse, change level, rebuild)
-    /// - Write all lines back using File.WriteAllLines()
+    /// Finds a character by name, increases their level by 1, and saves changes to file.
+    /// 
+    /// Implementation:
+    /// - Prompts user to enter the character name to level up
+    /// - File.ReadAllLines() loads all character records into a modifiable array
+    /// - Loops through array with index-based loop to enable modification
+    /// - Uses case-insensitive comparison (StringComparison.OrdinalIgnoreCase) for user-friendly search
+    /// - Parses the matching line, converts level to int, increments by 1
+    /// - Rebuilds the CSV line with updated level and stores in original array position
+    /// - File.WriteAllLines() overwrites the file with the modified array
     /// </summary>
     static void LevelUpCharacter()
     {
         Console.WriteLine("\n=== Level Up Character ===\n");
 
-        // TODO: Prompt for character name to level up
+        // Get the character name to find and level up
         Console.Write("Enter character name to level up: ");
-        string nameToFind = Console.ReadLine();
+        string? nameToFind = Console.ReadLine();
 
-        // TODO: Read all lines from the file
-        // string[] lines = File.ReadAllLines(filePath);
+        // Load all character records from file into a modifiable string array
+        string[] lines = File.ReadAllLines(filePath);
+        bool characterFound = false;
 
-        // TODO: Loop through lines to find the character
-        // TODO: Parse the line, increase level, rebuild
-        // TODO: Write all lines back to the file
+        // Use index-based loop to enable modification of array elements
+        for (int i = 0; i < lines.Length; i++)
+        {
+            // Split the CSV line to extract individual fields
+            string[] parts = lines[i].Split(',');
+            string name = parts[0];
+            
+            // Compare character names (case-insensitive for better UX)
+            // Equals() with OrdinalIgnoreCase makes "john" match "John"
+            if (name.Equals(nameToFind, StringComparison.OrdinalIgnoreCase))
+            {
+                characterFound = true;
+                
+                // Extract all fields from the parsed CSV line
+                string characterClass = parts[1];
+                // Parse level as integer to perform arithmetic operation
+                int currentLevel = int.Parse(parts[2]);
+                string hp = parts[3];
+                string equipment = parts[4];
+                
+                // Increment level by 1
+                int newLevel = currentLevel + 1;
+                
+                // Rebuild the CSV line with the updated level and store in array
+                // This modifies the array in-memory without affecting the file yet
+                lines[i] = $"{name},{characterClass},{newLevel},{hp},{equipment}";
+                
+                Console.WriteLine($"\n'{name}' has been leveled up from Level {currentLevel} to Level {newLevel}!");
+            }
+        }
+        
+        // If character was not found, inform user and exit early
+        if (!characterFound)
+        {
+            Console.WriteLine($"\nCharacter '{nameToFind}' not found.");
+            return;
+        }
 
-        Console.WriteLine("TODO: Implement level up functionality");
+        // Write the modified array back to file, permanently saving the change
+        // WriteAllLines() overwrites the entire file with the updated content
+        File.WriteAllLines(filePath, lines);
     }
 }
