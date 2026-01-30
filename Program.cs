@@ -1,4 +1,12 @@
 /// <summary>
+/// *Disclosure*: This project was initially set up using AI assistance as part of a Week 2 learning exercise.
+/// The code has since been reviewed, tested, and modified to ensure it works as intended.
+/// Moving forward, testing and modifications will be self-directed.
+/// Note: In real-world scenarios, development often involves modifying existing codebases rather than writing from scratch.
+/// </summary>
+
+
+/// <summary>
 /// Week 1: File I/O Basics - Console RPG Character Manager
 ///
 /// This program demonstrates fundamental file operations in C#:
@@ -101,20 +109,20 @@ class Program
         {
             // Split() separates the CSV line by commas into individual field values
             string[] parts = line.Split(',');
-            
+
             // Extract each field from the array using index positions
             string name = parts[0];
             string characterClass = parts[1];
             string level = parts[2];
             string hp = parts[3];
             string equipment = parts[4];
-            
+
             // Display each character's information with clear formatting
             Console.WriteLine($"Name: {name}");
             Console.WriteLine($"Class: {characterClass}");
             Console.WriteLine($"Level: {level}");
             Console.WriteLine($"HP: {hp}");
-            
+
             // Split equipment by '|' pipe character and rejoin with commas for display
             string[] equipmentItems = equipment.Split('|');
             Console.WriteLine($"Equipment: {string.Join(", ", equipmentItems)}");
@@ -138,16 +146,16 @@ class Program
         // Collect all character information from user input
         Console.Write("Enter character name: ");
         string? name = Console.ReadLine();
-        
+
         Console.Write("Enter character class: ");
         string? characterClass = Console.ReadLine();
-        
+
         Console.Write("Enter character level: ");
         string? level = Console.ReadLine();
-        
+
         Console.Write("Enter character HP: ");
         string? hp = Console.ReadLine();
-        
+
         Console.Write("Enter equipment (separated by |, e.g., sword|shield): ");
         string? equipment = Console.ReadLine();
 
@@ -158,7 +166,7 @@ class Program
         // AppendAllText() preserves existing data instead of overwriting it
         // Add newline BEFORE the new character to ensure it starts on a fresh line
         File.AppendAllText(filePath, "\n" + newLine);
-        
+
         Console.WriteLine($"\nCharacter '{name}' has been added successfully!");
     }
 
@@ -192,31 +200,31 @@ class Program
             // Split the CSV line to extract individual fields
             string[] parts = lines[i].Split(',');
             string name = parts[0];
-            
+
             // Compare character names (case-insensitive for better UX)
             // Equals() with OrdinalIgnoreCase makes "john" match "John"
             if (name.Equals(nameToFind, StringComparison.OrdinalIgnoreCase))
             {
                 characterFound = true;
-                
+
                 // Extract all fields from the parsed CSV line
                 string characterClass = parts[1];
                 // Parse level as integer to perform arithmetic operation
                 int currentLevel = int.Parse(parts[2]);
                 string hp = parts[3];
                 string equipment = parts[4];
-                
+
                 // Increment level by 1
                 int newLevel = currentLevel + 1;
-                
+
                 // Rebuild the CSV line with the updated level and store in array
                 // This modifies the array in-memory without affecting the file yet
                 lines[i] = $"{name},{characterClass},{newLevel},{hp},{equipment}";
-                
+
                 Console.WriteLine($"\n'{name}' has been leveled up from Level {currentLevel} to Level {newLevel}!");
             }
         }
-        
+
         // If character was not found, inform user and exit early
         if (!characterFound)
         {
