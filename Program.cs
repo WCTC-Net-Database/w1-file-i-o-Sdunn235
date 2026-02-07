@@ -29,10 +29,10 @@ class Program
     // The path to our data file - we'll read and write character data here
     static string filePath = "input.csv";
 
-    // CsvHelper configuration: no header row in the CSV
+    // CsvHelper configuration: file has a header row (Name,Class,Level,HP,Equipment)
     static readonly CsvConfiguration CsvConfig = new(CultureInfo.InvariantCulture)
     {
-        HasHeaderRecord = false,
+        HasHeaderRecord = true,
         TrimOptions = TrimOptions.Trim
     };
 
