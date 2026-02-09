@@ -1,105 +1,95 @@
-# Week 1: File I/O Basics
+# Week 2: Arrays and Complex CSV Parsing
 
-> **Template Purpose:** This is the starting template for the semester. Use this to begin your Console RPG project.
-
----
-
-## Your Repository for the Semester
-
-**This template becomes YOUR repository for the entire semester.**
-
-When you accept the GitHub Classroom assignment:
-1. A copy of this template is created as YOUR personal repository
-2. You'll continue building on this SAME repository each week
-3. By Week 15 (final), this will have grown into a complete RPG game
-
-**DO NOT** clone a new template each week. Instead:
-- Continue working in YOUR repository
-- Use future templates as REFERENCE MATERIAL
-- Only use a template as a "fresh start" if you've fallen behind
-
-See the **"How This Course Works"** section in the [w00-git-intro README](https://github.com/WCTC-Net-Database/w00-git-intro) for the full guide.
+> **Template Purpose:** This template represents a working solution through Week 1. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
 
 ---
 
 ## Overview
 
-This week you'll build a console application that handles RPG character data using file input/output operations. You'll practice reading from and writing to CSV files - a fundamental skill that prepares you for working with interfaces and databases later in the semester.
+This week you'll expand your console application to handle more complex data structures. You'll learn to parse CSV files with quoted strings, commas inside values, and equipment arrays. These parsing skills prepare you for handling real-world data formats.
 
 ## Learning Objectives
 
 By completing this assignment, you will:
-- [ ] Read character data from a CSV file
-- [ ] Write updated character data back to a CSV file
-- [ ] Create a simple menu-driven console application
-- [ ] Handle basic string parsing
+- [ ] Handle arrays (equipment lists) in CSV data
+- [ ] Parse quoted strings containing commas
+- [ ] Work with header rows in CSV files
+- [ ] Use string methods like `IndexOf`, `Substring`, and `Trim`
 
 ## Prerequisites
 
 Before starting, ensure you have:
-- [ ] Completed Week 0 Git assignment (you can clone and push)
-- [ ] Visual Studio or VS Code installed
-- [ ] Basic C# knowledge from your intro programming course
+- [ ] Completed Week 1 assignment (or are using this template)
+- [ ] Working file read/write operations
+- [ ] Basic menu structure in place
 
 ## What's New This Week
 
 | Concept | Description |
 |---------|-------------|
-| `File.ReadAllLines()` | Read all lines from a text file into an array |
-| `File.WriteAllLines()` | Write an array of strings to a text file |
-| `String.Split()` | Parse CSV data by splitting on commas |
+| `String.IndexOf()` | Find position of a character in a string |
+| `String.Substring()` | Extract a portion of a string |
+| `String.Trim()` | Remove characters from start/end of string |
+| Equipment Arrays | Store multiple items per character (e.g., `sword|shield|potion`) |
 
 ---
 
 ## Assignment Tasks
 
-### Task 1: Review the Starter Code
+### Task 1: Handle Header Rows
 
 **What to do:**
-- Open the provided template in Visual Studio
-- Review the existing `Program.cs` structure - the menu loop is complete
-- Run the application to see the menu in action
-- Read the comments in each method to understand what you need to implement
-
-**What's Already Done For You:**
-- Menu loop structure (switch statement)
-- `DisplayMenu()` method
-- Basic file reading in `DisplayAllCharacters()` (but not parsing)
-- Method stubs with TODO comments
-
-**Files:** `Program.cs`, `input.csv`
-
-### Task 2: Implement Character Display
-
-**What to do:**
-- Read character data from `input.csv`
-- Parse each line to extract Name, Class, Level, HP
-- Display all characters in a formatted list
+- Modify your CSV reading to skip or handle a header row
+- First line of CSV might be: `Name,Class,Level,HP,Equipment`
 
 **Example:**
 ```csharp
 string[] lines = File.ReadAllLines("input.csv");
-foreach (string line in lines)
+// Skip header row (index 0)
+for (int i = 1; i < lines.Length; i++)
 {
-    string[] parts = line.Split(',');
-    Console.WriteLine($"Name: {parts[0]}, Class: {parts[1]}, Level: {parts[2]}");
+    // Process data rows
 }
 ```
 
-### Task 3: Implement Add Character
+### Task 2: Parse Quoted Names
 
 **What to do:**
-- Prompt the user for character details (Name, Class, Level, HP)
-- Format as a CSV line
-- Append to the existing file
+- Handle names like `"Smith, John"` where the comma is part of the name
+- Detect when a field starts with a quote
+- Find the closing quote before splitting
 
-### Task 4: Implement Level Up
+**Example:**
+```csharp
+if (line.StartsWith("\""))
+{
+    int closingQuote = line.IndexOf("\"", 1);
+    string name = line.Substring(1, closingQuote - 1);
+    // Continue parsing after the quoted section
+}
+```
+
+### Task 3: Handle Equipment Arrays
 
 **What to do:**
-- Display numbered list of characters
-- Let user select a character by number
-- Increment their level
-- Save all characters back to the file
+- Equipment is stored as pipe-separated values: `sword|shield|potion`
+- Parse into a string array
+- Display equipment as a list
+- Allow adding/removing equipment
+
+**Example:**
+```csharp
+string equipmentField = "sword|shield|potion";
+string[] equipment = equipmentField.Split('|');
+// equipment[0] = "sword", equipment[1] = "shield", etc.
+```
+
+### Task 4: Write Back Correctly
+
+**What to do:**
+- When saving, preserve the CSV format
+- Re-quote names that contain commas
+- Join equipment arrays back with pipe separator
 
 ---
 
@@ -107,19 +97,26 @@ foreach (string line in lines)
 
 **Use the CsvHelper Library**
 
-Install the CsvHelper NuGet package and refactor your file operations to use it. This library handles edge cases (commas in values, quotes, etc.) automatically.
+CsvHelper handles all these edge cases automatically. Install it and refactor your code:
 
 ```bash
 dotnet add package CsvHelper
 ```
 
-See [CsvHelper Documentation](https://joshclose.github.io/CsvHelper/) for examples.
+```csharp
+using CsvHelper;
+using System.Globalization;
+
+using var reader = new StreamReader("input.csv");
+using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
+var records = csv.GetRecords<Character>().ToList();
+```
 
 ---
 
 ## Menu Structure
 
-After completing this assignment, your menu should look like:
+Your menu should still look like:
 ```
 1. Display Characters
 2. Add Character
@@ -129,12 +126,12 @@ After completing this assignment, your menu should look like:
 
 ---
 
-## Project Structure
+## Sample CSV Format
 
-```
-YourProjectName/
-├── Program.cs          # Main C# file containing all the logic
-└── input.csv           # Text file containing character data
+```csv
+Name,Class,Level,HP,Equipment
+"Smith, John",Warrior,5,100,sword|shield|potion
+Jane,Mage,3,60,staff|robe|scroll
 ```
 
 ---
@@ -143,10 +140,10 @@ YourProjectName/
 
 | Criteria | Points | Description |
 |----------|--------|-------------|
-| File Reading | 30 | Successfully reads and parses character data from CSV |
-| File Writing | 30 | Successfully writes updated data back to CSV |
-| Menu Implementation | 20 | All menu options work correctly |
-| Error Handling | 10 | Handles missing file, invalid input gracefully |
+| File I/O Operations | 25 | Reads and writes CSV with correct formatting |
+| Array Handling | 25 | Correctly parses and saves equipment arrays |
+| String Parsing | 25 | Handles quoted names and commas properly |
+| Program Flow | 15 | Menu works, no crashes |
 | Code Quality | 10 | Clean, readable, well-commented |
 | **Total** | **100** | |
 | **Stretch: CsvHelper** | **+10** | Successfully uses CsvHelper library |
@@ -155,26 +152,25 @@ YourProjectName/
 
 ## How This Connects to the Final Project
 
-- The Character data structure you create here will evolve into your Player entity
-- File I/O patterns will help you understand the interface abstraction in Week 4
-- The menu structure will remain consistent throughout the semester
-- Think of this as the foundation your RPG world is built on
+- Equipment arrays will become your Inventory system
+- Parsing skills help when working with JSON in Week 4
+- The Character model continues to grow each week
+- Understanding data formats prepares you for database work
 
 ---
 
 ## Tips
 
-- Start by getting file reading working before tackling writing
-- Test with a simple input.csv file (2-3 characters)
-- Use `Console.WriteLine()` to debug your parsing
-- Remember: CSV = Comma Separated Values
-- Don't worry about handling commas inside values yet (Week 2 covers that)
+- Test with edge cases: empty equipment, names with commas, special characters
+- Use `Console.WriteLine()` to debug your parsing step by step
+- The pipe `|` character is a good delimiter because it rarely appears in game data
+- Consider creating a `Character` class to hold parsed data (preview of Week 3)
 
 ---
 
 ## Submission
 
-1. Commit your changes with a meaningful message (e.g., "Add character display and level up features")
+1. Commit your changes with a meaningful message
 2. Push to your GitHub Classroom repository
 3. Submit the repository URL in Canvas
 
@@ -182,8 +178,8 @@ YourProjectName/
 
 ## Resources
 
-- [File.ReadAllLines Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.io.file.readalllines)
-- [String.Split Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.string.split)
+- [String.IndexOf Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.string.indexof)
+- [String.Substring Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.string.substring)
 - [CsvHelper Documentation](https://joshclose.github.io/CsvHelper/)
 
 ---

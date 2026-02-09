@@ -246,15 +246,6 @@ class Program
     }
 }
 
-class Character
-{
-    public string Name { get; set; } = string.Empty;
-    public string Class { get; set; } = string.Empty;
-    public int Level { get; set; }
-    public int Hp { get; set; }
-    public string Equipment { get; set; } = string.Empty;
-}
-
 sealed class CharacterMap : ClassMap<Character>
 {
     public CharacterMap()

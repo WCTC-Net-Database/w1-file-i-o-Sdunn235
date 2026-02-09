@@ -1,5 +1,7 @@
-John,Fighter,1,10,sword|shield|potion
+Name,Class,Level,Hp,Equipment
+"John, Brave",Fighter,1,10,sword|shield|potion
 Jane,Wizard,2,6,staff|robe|book
-Bob,Rogue,3,8,dagger|lockpick|cloak
+"Bob, Sneaky",Rogue,3,8,dagger|lockpick|cloak
 Alice,Cleric,4,12,mace|armor|potion
-Grimm,Loser,1,1,nothing
+"Reginald III, Sir",Knight,5,20,sword|armor|horse
+"Smith, Jane",Ranger,6,15,bow|quiver|rope
