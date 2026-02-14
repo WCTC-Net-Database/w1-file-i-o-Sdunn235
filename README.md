@@ -1,137 +1,184 @@
-# Week 2: Arrays and Complex CSV Parsing
+﻿# Week 3: Single Responsibility Principle (SRP) & LINQ
 
-> **Template Purpose:** This template represents a working solution through Week 1. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
+> **Template Purpose:** This template shows code that VIOLATES SRP (on purpose!). Your job is to refactor it into well-organized, single-responsibility classes.
 
 ---
 
 ## Overview
 
-This week you'll expand your console application to handle more complex data structures. You'll learn to parse CSV files with quoted strings, commas inside values, and equipment arrays. These parsing skills prepare you for handling real-world data formats.
+This week you'll learn your first SOLID principle: **Single Responsibility Principle (SRP)**. You'll refactor your code so each class has one job. You'll also learn LINQ (Language Integrated Query) to search and filter data efficiently. This is your first step toward professional code organization.
 
 ## Learning Objectives
 
 By completing this assignment, you will:
-- [ ] Handle arrays (equipment lists) in CSV data
-- [ ] Parse quoted strings containing commas
-- [ ] Work with header rows in CSV files
-- [ ] Use string methods like `IndexOf`, `Substring`, and `Trim`
+- [ ] Understand and apply the Single Responsibility Principle
+- [ ] Create separate classes for reading and writing data
+- [ ] Use LINQ to query collections (`FirstOrDefault`, `Where`)
+- [ ] Organize code into a logical folder structure
 
 ## Prerequisites
 
 Before starting, ensure you have:
-- [ ] Completed Week 1 assignment (or are using this template)
-- [ ] Working file read/write operations
-- [ ] Basic menu structure in place
+- [ ] Completed Week 2 assignment (or are using this template)
+- [ ] Working CSV read/write with equipment arrays
+- [ ] Basic understanding of classes and methods
 
 ## What's New This Week
 
 | Concept | Description |
 |---------|-------------|
-| `String.IndexOf()` | Find position of a character in a string |
-| `String.Substring()` | Extract a portion of a string |
-| `String.Trim()` | Remove characters from start/end of string |
-| Equipment Arrays | Store multiple items per character (e.g., `sword|shield|potion`) |
+| SRP | Each class should have only one reason to change |
+| `CharacterReader` | Class dedicated to reading character data |
+| `CharacterWriter` | Class dedicated to writing character data |
+| LINQ `FirstOrDefault` | Find a single item matching a condition |
+| LINQ `Where` | Filter a collection by condition |
 
 ---
 
 ## Assignment Tasks
 
-### Task 1: Handle Header Rows
+### Task 1: Understand the Problem (SRP Violation)
 
 **What to do:**
-- Modify your CSV reading to skip or handle a header row
-- First line of CSV might be: `Name,Class,Level,HP,Equipment`
+- Open `CharacterManager.cs` and read the comments at the top
+- Notice how this ONE class does EVERYTHING: reading, writing, searching, menu handling
+- This violates SRP - each class should have only ONE reason to change
 
-**Example:**
+**What's Already Provided:**
+- `Models/Character.cs` - A proper data class (review this as an example of good SRP)
+- `Services/CharacterReader.cs` - Stub class for reading (you'll implement this)
+- `Services/CharacterWriter.cs` - Stub class for writing (you'll implement this)
+
+**The Character class is done for you:**
 ```csharp
-string[] lines = File.ReadAllLines("input.csv");
-// Skip header row (index 0)
-for (int i = 1; i < lines.Length; i++)
+public class Character
 {
-    // Process data rows
+    public string Name { get; set; }
+    public string Profession { get; set; }
+    public int Level { get; set; }
+    public int HP { get; set; }
+    public string[] Equipment { get; set; }
 }
 ```
 
-### Task 2: Parse Quoted Names
+### Task 2: Implement CharacterReader Class
 
 **What to do:**
-- Handle names like `"Smith, John"` where the comma is part of the name
-- Detect when a field starts with a quote
-- Find the closing quote before splitting
+- Open `Services/CharacterReader.cs` - the structure is there, you implement the logic
+- Implement `ReadAll()` to read from CSV and return `List<Character>`
+- Implement `FindByName()` using LINQ's `FirstOrDefault`
 
-**Example:**
+**LINQ is the key learning here!**
 ```csharp
-if (line.StartsWith("\""))
+// FirstOrDefault returns the first match, or null if none found
+public Character FindByName(List<Character> characters, string name)
 {
-    int closingQuote = line.IndexOf("\"", 1);
-    string name = line.Substring(1, closingQuote - 1);
-    // Continue parsing after the quoted section
+    return characters.FirstOrDefault(c => c.Name == name);
+}
+
+// Where returns all matches as a collection
+public List<Character> FindByProfession(List<Character> characters, string profession)
+{
+    return characters.Where(c => c.Profession == profession).ToList();
 }
 ```
 
-### Task 3: Handle Equipment Arrays
+### Task 3: Implement CharacterWriter Class
 
 **What to do:**
-- Equipment is stored as pipe-separated values: `sword|shield|potion`
-- Parse into a string array
-- Display equipment as a list
-- Allow adding/removing equipment
+- Open `Services/CharacterWriter.cs` - the structure is there, you implement the logic
+- Implement `WriteAll()` to save all characters (replaces file)
+- Implement `AppendCharacter()` to add one character (doesn't rewrite everything)
 
 **Example:**
 ```csharp
-string equipmentField = "sword|shield|potion";
-string[] equipment = equipmentField.Split('|');
-// equipment[0] = "sword", equipment[1] = "shield", etc.
+public void WriteAll(List<Character> characters)
+{
+    var lines = characters.Select(c => FormatCharacter(c)).ToList();
+    File.WriteAllLines(_filePath, lines);
+}
+
+public void AppendCharacter(Character character)
+{
+    string line = FormatCharacter(character);
+    File.AppendAllText(_filePath, line + Environment.NewLine);
+}
 ```
 
-### Task 4: Write Back Correctly
+### Task 4: Update Menu with Find Character
 
 **What to do:**
-- When saving, preserve the CSV format
-- Re-quote names that contain commas
-- Join equipment arrays back with pipe separator
+- Add "Find Character" option to menu
+- Prompt for name, use LINQ to search
+- Display result or "not found" message
 
 ---
 
 ## Stretch Goal (+10%)
 
-**Use the CsvHelper Library**
+**Enhanced Console Output**
 
-CsvHelper handles all these edge cases automatically. Install it and refactor your code:
+Use a NuGet package to improve your console display:
 
 ```bash
-dotnet add package CsvHelper
+dotnet add package Spectre.Console
 ```
 
+Or use string interpolation with alignment:
 ```csharp
-using CsvHelper;
-using System.Globalization;
-
-using var reader = new StreamReader("input.csv");
-using var csv = new CsvReader(reader, CultureInfo.InvariantCulture);
-var records = csv.GetRecords<Character>().ToList();
+Console.WriteLine($"{"Name",-15} {"Profession",-10} {"Level",5}");
+Console.WriteLine($"{character.Name,-15} {character.Profession,-10} {character.Level,5}");
 ```
 
 ---
 
 ## Menu Structure
 
-Your menu should still look like:
+Your menu should now include Find Character:
 ```
 1. Display Characters
-2. Add Character
-3. Level Up Character
+2. Find Character
+3. Add Character
+4. Level Up Character
 0. Exit
 ```
 
 ---
 
-## Sample CSV Format
+## Project Structure
 
-```csv
-Name,Class,Level,HP,Equipment
-"Smith, John",Warrior,5,100,sword|shield|potion
-Jane,Mage,3,60,staff|robe|scroll
+```
+w3.console/
+├── Program.cs                      # Entry point
+├── CharacterManager.cs             # THE PROBLEM - violates SRP (refactor this!)
+├── Models/
+│   └── Character.cs                # PROVIDED - data class example
+├── Services/
+│   ├── CharacterReader.cs          # TODO - implement reading
+│   └── CharacterWriter.cs          # TODO - implement writing
+├── Interfaces/
+│   ├── IInput.cs                   # For testing
+│   └── IOutput.cs                  # For testing
+└── Files/
+    └── input.csv                   # Character data
+```
+
+---
+
+## LINQ Quick Reference
+
+```csharp
+// Find first match (or null)
+var hero = characters.FirstOrDefault(c => c.Name == "Hero");
+
+// Filter to multiple matches
+var warriors = characters.Where(c => c.Profession == "Warrior").ToList();
+
+// Sort by property
+var sorted = characters.OrderBy(c => c.Level).ToList();
+
+// Get just names
+var names = characters.Select(c => c.Name).ToList();
 ```
 
 ---
@@ -140,31 +187,33 @@ Jane,Mage,3,60,staff|robe|scroll
 
 | Criteria | Points | Description |
 |----------|--------|-------------|
-| File I/O Operations | 25 | Reads and writes CSV with correct formatting |
-| Array Handling | 25 | Correctly parses and saves equipment arrays |
-| String Parsing | 25 | Handles quoted names and commas properly |
-| Program Flow | 15 | Menu works, no crashes |
+| SRP Implementation | 30 | CharacterReader and CharacterWriter have clear, single responsibilities |
+| LINQ Implementation | 25 | FindByName uses LINQ correctly |
+| File I/O Integration | 20 | Read/write works with refactored classes |
+| Program Flow | 15 | Menu works with new Find Character option |
 | Code Quality | 10 | Clean, readable, well-commented |
 | **Total** | **100** | |
-| **Stretch: CsvHelper** | **+10** | Successfully uses CsvHelper library |
+| **Stretch: Enhanced Output** | **+10** | Uses Spectre.Console or formatted strings |
 
 ---
 
 ## How This Connects to the Final Project
 
-- Equipment arrays will become your Inventory system
-- Parsing skills help when working with JSON in Week 4
-- The Character model continues to grow each week
-- Understanding data formats prepares you for database work
+- SRP is the foundation of clean architecture used throughout the course
+- The `Character` class evolves into your `Player` entity
+- LINQ becomes essential for database queries in Weeks 9-12
+- This class structure previews the separation used in the final project
+
+**Next Week Preview:** In Week 4, you'll create an `IFileHandler` interface that combines CharacterReader and CharacterWriter. This lets you swap CSV for JSON without changing your business logic - the Open/Closed Principle!
 
 ---
 
 ## Tips
 
-- Test with edge cases: empty equipment, names with commas, special characters
-- Use `Console.WriteLine()` to debug your parsing step by step
-- The pipe `|` character is a good delimiter because it rarely appears in game data
-- Consider creating a `Character` class to hold parsed data (preview of Week 3)
+- Start by creating the Character class before refactoring
+- Test each class independently before integrating
+- LINQ methods are chainable: `characters.Where(...).OrderBy(...).ToList()`
+- If you're stuck, review the in-class examples
 
 ---
 
@@ -178,9 +227,9 @@ Jane,Mage,3,60,staff|robe|scroll
 
 ## Resources
 
-- [String.IndexOf Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.string.indexof)
-- [String.Substring Documentation](https://docs.microsoft.com/en-us/dotnet/api/system.string.substring)
-- [CsvHelper Documentation](https://joshclose.github.io/CsvHelper/)
+- [Single Responsibility Principle](https://www.freecodecamp.org/news/solid-principles-single-responsibility-principle-explained/)
+- [LINQ Documentation](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/linq/)
+- [Spectre.Console](https://spectreconsole.net/)
 
 ---
 
@@ -188,4 +237,4 @@ Jane,Mage,3,60,staff|robe|scroll
 
 - Post questions in the Canvas discussion board
 - Attend office hours
-- Review the in-class repository for additional examples
+- Review the in-class repository for additional examplesles
