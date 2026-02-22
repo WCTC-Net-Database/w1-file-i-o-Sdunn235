@@ -1,0 +1,51 @@
+[
+  {
+    "Name": "John, Brave",
+    "Class": "Fighter",
+    "Level": 1,
+    "Hp": 10,
+    "Equipment": "sword|shield|potion"
+  },
+  {
+    "Name": "Jane",
+    "Class": "Wizard",
+    "Level": 2,
+    "Hp": 6,
+    "Equipment": "staff|robe|book"
+  },
+  {
+    "Name": "Bob, Sneaky",
+    "Class": "Rogue",
+    "Level": 3,
+    "Hp": 8,
+    "Equipment": "dagger|lockpick|cloak"
+  },
+  {
+    "Name": "Alice",
+    "Class": "Cleric",
+    "Level": 4,
+    "Hp": 12,
+    "Equipment": "mace|armor|potion"
+  },
+  {
+    "Name": "Reginald III, Sir",
+    "Class": "Knight",
+    "Level": 5,
+    "Hp": 20,
+    "Equipment": "sword|armor|horse"
+  },
+  {
+    "Name": "Smith, Jane",
+    "Class": "Ranger",
+    "Level": 6,
+    "Hp": 15,
+    "Equipment": "bow|quiver|rope"
+  },
+  {
+    "Name": "Grimm",
+    "Class": "Special",
+    "Level": 100,
+    "Hp": 9999,
+    "Equipment": "Everything|Nothing|"
+  }
+]
