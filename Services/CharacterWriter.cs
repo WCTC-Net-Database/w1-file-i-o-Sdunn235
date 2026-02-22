@@ -2,11 +2,11 @@ using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
 
-namespace W3Srp.Services;
+namespace W4Ocp.Services;
 
 /// <summary>
 /// Responsible for writing Character data to CSV files.
-/// This class follows the Single Responsibility Principle - it only handles writing operations.
+/// This class follows the Single Responsibility Principle and Open/Closed Principle.
 /// </summary>
 public class CharacterWriter
 {

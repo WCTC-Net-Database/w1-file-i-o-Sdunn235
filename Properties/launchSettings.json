@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "w4-ocp": {
+      "commandName": "Project"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
+    }
+  }
+}

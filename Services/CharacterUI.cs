@@ -1,23 +1,23 @@
-namespace W3Srp.Services;
+using W4Ocp.Interfaces;
+
+namespace W4Ocp.Services;
 
 /// <summary>
 /// Responsible for all character-related console interactions.
-/// This class follows the Single Responsibility Principle - it only handles UI for character operations.
+/// This class follows the Single Responsibility Principle and Open/Closed Principle.
+/// Now uses IFileHandler interface - it doesn't care if it's CSV, JSON, or any other format!
 /// </summary>
 public class CharacterUI
 {
-    private readonly CharacterReader _reader;
-    private readonly CharacterWriter _writer;
+    private readonly IFileHandler _fileHandler;
 
     /// <summary>
-    /// Initializes a new instance of CharacterUI with required services.
+    /// Initializes a new instance of CharacterUI with a file handler.
     /// </summary>
-    /// <param name="reader">The CharacterReader service for reading character data.</param>
-    /// <param name="writer">The CharacterWriter service for writing character data.</param>
-    public CharacterUI(CharacterReader reader, CharacterWriter writer)
+    /// <param name="fileHandler">The file handler implementation (CSV, JSON, etc.).</param>
+    public CharacterUI(IFileHandler fileHandler)
     {
-        _reader = reader;
-        _writer = writer;
+        _fileHandler = fileHandler;
     }
 
     /// <summary>
@@ -26,8 +26,8 @@ public class CharacterUI
     public void DisplayAllCharacters()
     {
         Console.WriteLine("\n=== All Characters ===\n");
-        
-        List<Character> characters = _reader.ReadAll();
+
+        List<Character> characters = _fileHandler.ReadAll();
 
         if (characters.Count == 0)
         {
@@ -41,18 +41,18 @@ public class CharacterUI
             DisplayCharacterDetails(character);
             Console.WriteLine("-------------------------");
         }
-        
+
         Console.WriteLine($"Total characters: {characters.Count}");
     }
 
     /// <summary>
     /// Prompts user for a character name and displays the matching character if found.
-    /// Uses LINQ through the CharacterReader service.
+    /// Uses LINQ through the IFileHandler interface.
     /// </summary>
     public void FindCharacter()
     {
         Console.WriteLine("\n=== Find Character ===\n");
-        
+
         Console.Write("Enter character name to find: ");
         string? name = Console.ReadLine();
 
@@ -62,8 +62,9 @@ public class CharacterUI
             return;
         }
 
-        // Use LINQ through CharacterReader service
-        Character? character = _reader.FindByName(name);
+        // Get all characters and use LINQ through the file handler
+        List<Character> characters = _fileHandler.ReadAll();
+        Character? character = _fileHandler.FindByName(characters, name);
 
         if (character == null)
         {
@@ -109,8 +110,8 @@ public class CharacterUI
             Equipment = equipment ?? string.Empty
         };
 
-        // Use CharacterWriter service to append the new character
-        _writer.AppendCharacter(newCharacter);
+        // Use IFileHandler to append the new character
+        _fileHandler.AppendCharacter(newCharacter);
 
         Console.WriteLine($"\nCharacter '{name}' has been added successfully!");
     }
@@ -132,8 +133,8 @@ public class CharacterUI
             return;
         }
 
-        // Load all character records using CharacterReader
-        List<Character> characters = _reader.ReadAll();
+        // Load all character records using IFileHandler
+        List<Character> characters = _fileHandler.ReadAll();
         bool characterFound = false;
 
         foreach (Character character in characters)
@@ -155,8 +156,8 @@ public class CharacterUI
             return;
         }
 
-        // Write the modified list back to file using CharacterWriter
-        _writer.WriteAll(characters);
+        // Write the modified list back to file using IFileHandler
+        _fileHandler.WriteAll(characters);
     }
 
     /// <summary>

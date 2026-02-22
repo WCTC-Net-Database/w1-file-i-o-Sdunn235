@@ -1,146 +1,248 @@
-﻿# Week 3: Single Responsibility Principle (SRP) & LINQ
+﻿# Week 4: Open/Closed Principle (OCP) & Interfaces
 
-> **Template Purpose:** This template shows code that VIOLATES SRP (on purpose!). Your job is to refactor it into well-organized, single-responsibility classes.
+> **Project Status:** ✅ **Completed** - All tasks and stretch goal (+10%) successfully implemented
 
 ---
 
 ## Overview
 
-This week you'll learn your first SOLID principle: **Single Responsibility Principle (SRP)**. You'll refactor your code so each class has one job. You'll also learn LINQ (Language Integrated Query) to search and filter data efficiently. This is your first step toward professional code organization.
+This project demonstrates the **Open/Closed Principle (OCP)**: software should be open for extension but closed for modification. I created an `IFileHandler` interface that combines reading and writing logic, then implemented it for both CSV and JSON formats. The key achievement is that adding JSON support required **zero modifications** to existing CSV code or the main program logic.
 
-## Learning Objectives
+## The Big Picture: Building Toward Databases
 
-By completing this assignment, you will:
-- [ ] Understand and apply the Single Responsibility Principle
-- [ ] Create separate classes for reading and writing data
-- [ ] Use LINQ to query collections (`FirstOrDefault`, `Where`)
-- [ ] Organize code into a logical folder structure
+```
+Week 3:  CharacterReader + CharacterWriter  (concrete classes, CSV only)
+            ↓
+Week 4:  IFileHandler  (interface!)
+            ├── CsvFileHandler   ← your Week 3 logic
+            └── JsonFileHandler  ← NEW!
+            ↓
+Week 9:  DbContext  (same pattern, but with SQL Server!)
+```
 
-## Prerequisites
+The pattern you learn this week - swapping implementations without changing business logic - is **exactly** how Entity Framework Core works. When you reach Week 9, you'll recognize the pattern immediately!
 
-Before starting, ensure you have:
-- [ ] Completed Week 2 assignment (or are using this template)
-- [ ] Working CSV read/write with equipment arrays
-- [ ] Basic understanding of classes and methods
+---
+
+## What I Learned
+
+Through this project, I successfully:
+- ✅ **Applied the Open/Closed Principle** - Added JSON support without modifying existing CSV code
+- ✅ **Created an interface from existing classes** - `IFileHandler` abstracts file operations
+- ✅ **Implemented multiple format handlers** - Both CSV and JSON implementations
+- ✅ **Achieved runtime format switching** - User can switch formats without restarting (stretch goal)
+- ✅ **Practiced SOLID principles** - Single Responsibility and Open/Closed Principles throughout
+
+## Technologies Used
+
+- **.NET 10.0** - Latest .NET framework
+- **C# 14.0** - Modern C# with pattern matching and null-safety  
+- **CsvHelper** - Professional CSV parsing library
+- **System.Text.Json** - Built-in JSON serialization
+- **LINQ** - For querying character data
 
 ## What's New This Week
 
 | Concept | Description |
 |---------|-------------|
-| SRP | Each class should have only one reason to change |
-| `CharacterReader` | Class dedicated to reading character data |
-| `CharacterWriter` | Class dedicated to writing character data |
-| LINQ `FirstOrDefault` | Find a single item matching a condition |
-| LINQ `Where` | Filter a collection by condition |
+| OCP | Open for extension, closed for modification |
+| Interface | A contract that classes must implement |
+| `IFileHandler` | Interface for all file operations |
+| `CsvFileHandler` | CSV implementation (your Week 3 code) |
+| `JsonFileHandler` | NEW: JSON implementation |
 
 ---
 
-## Assignment Tasks
+---
 
-### Task 1: Understand the Problem (SRP Violation)
+## Implementation Details
 
-**What to do:**
-- Open `CharacterManager.cs` and read the comments at the top
-- Notice how this ONE class does EVERYTHING: reading, writing, searching, menu handling
-- This violates SRP - each class should have only ONE reason to change
+### Task 1: IFileHandler Interface ✅
 
-**What's Already Provided:**
-- `Models/Character.cs` - A proper data class (review this as an example of good SRP)
-- `Services/CharacterReader.cs` - Stub class for reading (you'll implement this)
-- `Services/CharacterWriter.cs` - Stub class for writing (you'll implement this)
+**What I Did:**
+Created `Interfaces/IFileHandler.cs` that defines the contract for all file operations:
 
-**The Character class is done for you:**
 ```csharp
-public class Character
+public interface IFileHandler
 {
-    public string Name { get; set; }
-    public string Profession { get; set; }
-    public int Level { get; set; }
-    public int HP { get; set; }
-    public string[] Equipment { get; set; }
+    List<Character> ReadAll();
+    Character? FindByName(List<Character> characters, string name);
+    List<Character> FindByClass(List<Character> characters, string className);
+    void WriteAll(List<Character> characters);
+    void AppendCharacter(Character character);
 }
 ```
 
-### Task 2: Implement CharacterReader Class
+**Key Design Decision:**
+Combined reading and writing in one interface because file handlers naturally do both operations. This mirrors how Entity Framework's `DbContext` works - one class handles all data operations.
+
+### Task 2: Implement CsvFileHandler
 
 **What to do:**
-- Open `Services/CharacterReader.cs` - the structure is there, you implement the logic
-- Implement `ReadAll()` to read from CSV and return `List<Character>`
-- Implement `FindByName()` using LINQ's `FirstOrDefault`
-
-**LINQ is the key learning here!**
-```csharp
-// FirstOrDefault returns the first match, or null if none found
-public Character FindByName(List<Character> characters, string name)
-{
-    return characters.FirstOrDefault(c => c.Name == name);
-}
-
-// Where returns all matches as a collection
-public List<Character> FindByProfession(List<Character> characters, string profession)
-{
-    return characters.Where(c => c.Profession == profession).ToList();
-}
-```
-
-### Task 3: Implement CharacterWriter Class
-
-**What to do:**
-- Open `Services/CharacterWriter.cs` - the structure is there, you implement the logic
-- Implement `WriteAll()` to save all characters (replaces file)
-- Implement `AppendCharacter()` to add one character (doesn't rewrite everything)
+- Create `CsvFileHandler.cs` that implements `IFileHandler`
+- Copy your Week 3 CharacterReader and CharacterWriter logic into this class
 
 **Example:**
 ```csharp
-public void WriteAll(List<Character> characters)
+public class CsvFileHandler : IFileHandler
 {
-    var lines = characters.Select(c => FormatCharacter(c)).ToList();
-    File.WriteAllLines(_filePath, lines);
-}
+    private readonly string _filePath;
 
-public void AppendCharacter(Character character)
-{
-    string line = FormatCharacter(character);
-    File.AppendAllText(_filePath, line + Environment.NewLine);
+    public CsvFileHandler(string filePath)
+    {
+        _filePath = filePath;
+    }
+
+    public List<Character> ReadAll()
+    {
+        // Your Week 3 CharacterReader.ReadAll() logic
+    }
+
+    public void WriteAll(List<Character> characters)
+    {
+        // Your Week 3 CharacterWriter.WriteAll() logic
+    }
+
+    public void AppendCharacter(Character character)
+    {
+        // Your Week 3 CharacterWriter.AppendCharacter() logic
+    }
+
+    public Character? FindByName(List<Character> characters, string name)
+    {
+        // Your Week 3 LINQ logic
+        return characters.FirstOrDefault(c =>
+            c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public List<Character> FindByProfession(List<Character> characters, string profession)
+    {
+        // Your Week 3 LINQ logic
+        return characters.Where(c =>
+            c.Profession.Equals(profession, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
 }
 ```
 
-### Task 4: Update Menu with Find Character
+### Task 3: Implement JsonFileHandler
 
 **What to do:**
-- Add "Find Character" option to menu
-- Prompt for name, use LINQ to search
-- Display result or "not found" message
+- Create `JsonFileHandler.cs` that implements `IFileHandler`
+- Use `System.Text.Json` for JSON handling
+- The LINQ methods (FindByName, FindByProfession) are IDENTICAL to CSV!
+
+**Example:**
+```csharp
+using System.Text.Json;
+
+public class JsonFileHandler : IFileHandler
+{
+    private readonly string _filePath;
+    private readonly JsonSerializerOptions _options = new() { WriteIndented = true };
+
+    public JsonFileHandler(string filePath)
+    {
+        _filePath = filePath;
+    }
+
+    public List<Character> ReadAll()
+    {
+        string json = File.ReadAllText(_filePath);
+        return JsonSerializer.Deserialize<List<Character>>(json) ?? new List<Character>();
+    }
+
+    public void WriteAll(List<Character> characters)
+    {
+        string json = JsonSerializer.Serialize(characters, _options);
+        File.WriteAllText(_filePath, json);
+    }
+
+    public void AppendCharacter(Character character)
+    {
+        // JSON doesn't support simple append - must read, add, write
+        var characters = ReadAll();
+        characters.Add(character);
+        WriteAll(characters);
+    }
+
+    // LINQ methods are identical to CSV - the interface ensures consistency!
+    public Character? FindByName(List<Character> characters, string name)
+    {
+        return characters.FirstOrDefault(c =>
+            c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public List<Character> FindByProfession(List<Character> characters, string profession)
+    {
+        return characters.Where(c =>
+            c.Profession.Equals(profession, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+}
+```
+
+### Task 4: Update Program to Use Interface
+
+**What to do:**
+- Declare your file handler as `IFileHandler` type
+- The program doesn't care which implementation it's using!
+
+**Example:**
+```csharp
+// Program uses interface - it doesn't know (or care) if it's CSV or JSON!
+IFileHandler fileHandler = new JsonFileHandler("input.json");
+var characters = fileHandler.ReadAll();
+
+// Later...
+fileHandler.WriteAll(characters);
+```
 
 ---
 
 ## Stretch Goal (+10%)
 
-**Enhanced Console Output**
+**Switch Formats at Runtime**
 
-Use a NuGet package to improve your console display:
+Add a menu option to switch between CSV and JSON without restarting:
 
-```bash
-dotnet add package Spectre.Console
-```
-
-Or use string interpolation with alignment:
-```csharp
-Console.WriteLine($"{"Name",-15} {"Profession",-10} {"Level",5}");
-Console.WriteLine($"{character.Name,-15} {character.Profession,-10} {character.Level,5}");
-```
-
----
-
-## Menu Structure
-
-Your menu should now include Find Character:
 ```
 1. Display Characters
 2. Find Character
 3. Add Character
 4. Level Up Character
+5. Switch File Format (CSV/JSON)
 0. Exit
+```
+
+```csharp
+// Switch handler based on user choice
+if (userChoice == "json")
+    fileHandler = new JsonFileHandler("input.json");
+else
+    fileHandler = new CsvFileHandler("input.csv");
+```
+
+---
+
+## JSON File Format
+
+Your JSON file should look like:
+```json
+[
+  {
+    "Name": "John",
+    "Profession": "Fighter",
+    "Level": 1,
+    "HP": 10,
+    "Equipment": ["sword", "shield", "potion"]
+  },
+  {
+    "Name": "Jane",
+    "Profession": "Wizard",
+    "Level": 2,
+    "HP": 6,
+    "Equipment": ["staff", "robe", "book"]
+  }
+]
 ```
 
 ---
@@ -148,37 +250,37 @@ Your menu should now include Find Character:
 ## Project Structure
 
 ```
-w3.console/
-├── Program.cs                      # Entry point
-├── CharacterManager.cs             # THE PROBLEM - violates SRP (refactor this!)
+YourProjectName/
+├── Program.cs                    # Uses IFileHandler interface
 ├── Models/
-│   └── Character.cs                # PROVIDED - data class example
-├── Services/
-│   ├── CharacterReader.cs          # TODO - implement reading
-│   └── CharacterWriter.cs          # TODO - implement writing
+│   └── Character.cs              # Same as Week 3
 ├── Interfaces/
-│   ├── IInput.cs                   # For testing
-│   └── IOutput.cs                  # For testing
+│   └── IFileHandler.cs           # NEW: The interface
+├── Services/
+│   ├── CsvFileHandler.cs         # CSV implementation (Week 3 code)
+│   └── JsonFileHandler.cs        # NEW: JSON implementation
 └── Files/
-    └── input.csv                   # Character data
+    ├── input.csv                 # CSV data file
+    └── input.json                # JSON data file
 ```
 
 ---
 
-## LINQ Quick Reference
+## The Power of OCP
 
+**Before (violates OCP):**
 ```csharp
-// Find first match (or null)
-var hero = characters.FirstOrDefault(c => c.Name == "Hero");
+// Adding XML support requires modifying existing code
+if (format == "csv") { /* csv logic */ }
+else if (format == "json") { /* json logic */ }
+else if (format == "xml") { /* must add here - MODIFYING! */ }
+```
 
-// Filter to multiple matches
-var warriors = characters.Where(c => c.Profession == "Warrior").ToList();
-
-// Sort by property
-var sorted = characters.OrderBy(c => c.Level).ToList();
-
-// Get just names
-var names = characters.Select(c => c.Name).ToList();
+**After (follows OCP):**
+```csharp
+// Adding XML support = create new class, no existing code changes!
+IFileHandler handler = new XmlFileHandler("input.xml");  // Just add new class!
+// CsvFileHandler and JsonFileHandler are UNTOUCHED
 ```
 
 ---
@@ -187,33 +289,50 @@ var names = characters.Select(c => c.Name).ToList();
 
 | Criteria | Points | Description |
 |----------|--------|-------------|
-| SRP Implementation | 30 | CharacterReader and CharacterWriter have clear, single responsibilities |
-| LINQ Implementation | 25 | FindByName uses LINQ correctly |
-| File I/O Integration | 20 | Read/write works with refactored classes |
-| Program Flow | 15 | Menu works with new Find Character option |
-| Code Quality | 10 | Clean, readable, well-commented |
+| IFileHandler Interface | 20 | Properly defined with all methods |
+| CsvFileHandler | 25 | Correctly implements interface with Week 3 logic |
+| JsonFileHandler | 25 | Correctly implements interface for JSON |
+| OCP Compliance | 15 | Program uses interface, not concrete classes |
+| LINQ Methods | 5 | FindByName and FindByProfession work correctly |
+| Code Quality | 10 | Clean, readable, follows patterns |
 | **Total** | **100** | |
-| **Stretch: Enhanced Output** | **+10** | Uses Spectre.Console or formatted strings |
+| **Stretch: Format Switching** | **+10** | Switch formats via menu at runtime |
 
 ---
 
 ## How This Connects to the Final Project
 
-- SRP is the foundation of clean architecture used throughout the course
-- The `Character` class evolves into your `Player` entity
-- LINQ becomes essential for database queries in Weeks 9-12
-- This class structure previews the separation used in the final project
+This is important - the pattern you're learning here **evolves** through the semester:
 
-**Next Week Preview:** In Week 4, you'll create an `IFileHandler` interface that combines CharacterReader and CharacterWriter. This lets you swap CSV for JSON without changing your business logic - the Open/Closed Principle!
+| Week | Pattern | What It Does |
+|------|---------|--------------|
+| Week 4 | `IFileHandler` | Single entity (Characters), CSV/JSON |
+| Week 7 | `IContext` | Multiple entities + `SaveChanges()` |
+| Week 9 | `DbContext` | Real database with EF Core |
+
+**The progression:**
+```
+IFileHandler (this week)
+    └── ReadAll(), WriteAll(), Find methods for Characters
+            ↓
+IContext (Week 7 midterm prep)
+    └── Players, Monsters, Items + SaveChanges()
+            ↓
+DbContext (Week 9)
+    └── DbSet<Player>, DbSet<Monster> + SaveChanges()
+```
+
+When you learn Entity Framework Core, you'll recognize the pattern immediately!
 
 ---
 
 ## Tips
 
-- Start by creating the Character class before refactoring
-- Test each class independently before integrating
-- LINQ methods are chainable: `characters.Where(...).OrderBy(...).ToList()`
-- If you're stuck, review the in-class examples
+- Start by creating the interface - list all methods from Week 3's Reader + Writer
+- Implement CSV first (it's just your Week 3 code reorganized)
+- JSON is easier to debug (human-readable format)
+- Use `JsonSerializerOptions { WriteIndented = true }` for readable JSON output
+- The LINQ methods (FindByName, FindByProfession) are IDENTICAL across implementations!
 
 ---
 
@@ -227,9 +346,9 @@ var names = characters.Select(c => c.Name).ToList();
 
 ## Resources
 
-- [Single Responsibility Principle](https://www.freecodecamp.org/news/solid-principles-single-responsibility-principle-explained/)
-- [LINQ Documentation](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/linq/)
-- [Spectre.Console](https://spectreconsole.net/)
+- [C# Interfaces](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/interfaces/)
+- [System.Text.Json](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-overview)
+- [Open/Closed Principle](https://stackify.com/solid-design-open-closed-principle/)
 
 ---
 
@@ -237,4 +356,4 @@ var names = characters.Select(c => c.Name).ToList();
 
 - Post questions in the Canvas discussion board
 - Attend office hours
-- Review the in-class repository for additional examplesles
+- Review the in-class repository for additional examples

@@ -1,8 +1,8 @@
-namespace W3Srp.Services;
+namespace W4Ocp.Services;
 
 /// <summary>
 /// Responsible for displaying menus and getting user choices.
-/// This class follows the Single Responsibility Principle - it only handles menu display and navigation.
+/// This class follows the Single Responsibility Principle and Open/Closed Principle.
 /// </summary>
 public class MenuService
 {
@@ -16,6 +16,7 @@ public class MenuService
         Console.WriteLine("2. Find Character");
         Console.WriteLine("3. Add New Character");
         Console.WriteLine("4. Level Up Character");
+        Console.WriteLine("5. Switch File Format (CSV/JSON)");
         Console.WriteLine("0. Exit");
     }
 
@@ -35,7 +36,7 @@ public class MenuService
     public void DisplayWelcome()
     {
         Console.WriteLine("=== Console RPG Character Manager ===");
-        Console.WriteLine("Week 3: Single Responsibility Principle\n");
+        Console.WriteLine("Week 4: Open/Closed Principle\n");
     }
 
     /// <summary>
@@ -62,5 +63,45 @@ public class MenuService
         Console.WriteLine("\nPress any key to continue...");
         Console.ReadKey();
         Console.Clear();
+    }
+
+    /// <summary>
+    /// Displays the file format selection menu and gets the user's choice.
+    /// </summary>
+    /// <returns>The selected format as a string ("csv" or "json"), or empty string if cancelled.</returns>
+    public string GetFileFormatChoice()
+    {
+        Console.WriteLine("\n=== Switch File Format ===");
+        Console.WriteLine("1. CSV Format");
+        Console.WriteLine("2. JSON Format");
+        Console.WriteLine("0. Cancel");
+        Console.Write("\nEnter your choice: ");
+        
+        string choice = Console.ReadLine() ?? string.Empty;
+        
+        return choice switch
+        {
+            "1" => "csv",
+            "2" => "json",
+            "0" => string.Empty,
+            _ => string.Empty
+        };
+    }
+
+    /// <summary>
+    /// Displays a success message when the file format is changed.
+    /// </summary>
+    /// <param name="format">The new file format (CSV or JSON).</param>
+    public void DisplayFormatChanged(string format)
+    {
+        Console.WriteLine($"\n✓ File format successfully changed to {format.ToUpper()}");
+    }
+
+    /// <summary>
+    /// Displays a cancellation message when format switch is cancelled.
+    /// </summary>
+    public void DisplayFormatChangeCancelled()
+    {
+        Console.WriteLine("\nFormat switch cancelled.");
     }
 }
