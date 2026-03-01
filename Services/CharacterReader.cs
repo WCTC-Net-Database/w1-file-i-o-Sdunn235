@@ -1,8 +1,9 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
+using W5SolidLsp.Models.Characters;
 
-namespace W4Ocp.Services;
+namespace W5SolidLsp.Services;
 
 /// <summary>
 /// Responsible for reading Character data from CSV files.

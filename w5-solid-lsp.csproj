@@ -3,17 +3,18 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <RootNamespace>w4_ocp</RootNamespace>
+    <RootNamespace>W5SolidLsp</RootNamespace>
+    <AssemblyName>W5SolidLsp</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Copy input files to the output directory (bin/Debug/net10.0) -->
-    <None Update="input.csv">
+    <!-- Copy input files to the output directory (bin/Debug/net10.0/Input) -->
+    <None Update="Input\input.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="input.json">
+    <None Update="Input\input.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -1,9 +1,10 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
-using W4Ocp.Interfaces;
+using W5SolidLsp.Interfaces;
+using W5SolidLsp.Models.Characters;
 
-namespace W4Ocp.Services;
+namespace W5SolidLsp.Services;
 
 /// <summary>
 /// CSV implementation of IFileHandler.

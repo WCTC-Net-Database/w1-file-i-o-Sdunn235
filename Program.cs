@@ -1,21 +1,20 @@
-using W4Ocp.Interfaces;
-using W4Ocp.Services;
+using W5SolidLsp.Interfaces;
+using W5SolidLsp.Models.Characters.Npcs.Monsters;
+using W5SolidLsp.Models.Classes;
+using W5SolidLsp.Services;
 
 /// <summary>
-/// Week 4: Open/Closed Principle - Console RPG Character Manager
+/// Week 5: LSP & ISP - Console RPG Character Manager
 ///
-/// This program demonstrates the Open/Closed Principle (OCP):
-/// - IFileHandler: Interface for all file operations
-/// - CsvFileHandler: CSV implementation
-/// - JsonFileHandler: JSON implementation (can be swapped without changing business logic!)
-/// - CharacterUI: Handles console interactions (doesn't care about file format)
-/// - MenuService: Handles menu display and navigation
-/// - Program: Orchestrates the application flow (main loop only)
+/// This program demonstrates the Liskov Substitution Principle (LSP) and
+/// Interface Segregation Principle (ISP), building on Week 4's OCP work:
+/// - IEntity: Clean base interface (no Fly - that violated LSP!)
+/// - IFlyable, IShootable, ISwimmable: Focused behavior interfaces (ISP)
+/// - GameEngine: Processes entities using the 'is' keyword to check capabilities
+/// - IFileHandler: Interface for all file operations (carried over from W4)
 ///
-/// The key: Program uses IFileHandler, not a concrete class. This means we can swap
-/// CSV for JSON (or add XML, Database, etc.) without modifying existing code!
-///
-/// STRETCH GOAL: Runtime format switching - Change between CSV and JSON without restarting!
+/// The key LSP fix: Fly() is no longer on IEntity. Only entities that CAN fly
+/// implement IFlyable. GameEngine checks before calling - no NotSupportedException!
 /// </summary>
 ///
 /// <remarks>
@@ -40,6 +39,9 @@ class Program
 
         // Display welcome message
         _menu.DisplayWelcome();
+
+        // --- W5: Run the GameEngine demo before the main menu ---
+        RunGameEngineDemo();
 
         // Main program loop - keeps running until user chooses to exit
         bool running = true;
@@ -85,6 +87,40 @@ class Program
                 _menu.PauseAndClear();
             }
         }
+    }
+
+    /// <summary>
+    /// Demonstrates the W5 GameEngine with LSP + ISP in action.
+    /// Creates a mixed list of entities and processes each one.
+    /// The GameEngine only knows about IEntity — it uses 'is' to discover
+    /// optional capabilities at runtime without breaking LSP.
+    /// </summary>
+    private static void RunGameEngineDemo()
+    {
+        Console.WriteLine("=== W5: GameEngine Demo (LSP + ISP) ===\n");
+
+        // Build a list of mixed entities — GameEngine only sees IEntity
+        var entities = new List<IEntity>
+        {
+            new Ghost("Shade", 3, 20),
+            new Goblin("Gruk", 1, 15, "crude dagger"),
+            new Troll("Morg", 4, 60, "club"),
+            new Archer("Robin", 2, 30, "longbow|quiver")
+        };
+
+        var engine = new GameEngine(entities);
+
+        // Run using direct 'is' checks (Tasks 2 & 3)
+        Console.WriteLine("--- Direct processing (is keyword) ---");
+        engine.RunTurn();
+
+        // Run using Command Pattern (Stretch Goal)
+        Console.WriteLine("--- Command queue (Command Pattern stretch goal) ---");
+        engine.RunTurnWithCommands();
+
+        Console.WriteLine("\nPress any key to continue to the Character Manager...");
+        Console.ReadKey();
+        Console.Clear();
     }
 
     /// <summary>

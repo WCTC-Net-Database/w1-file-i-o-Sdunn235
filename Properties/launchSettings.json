@@ -1,7 +1,8 @@
 {
   "profiles": {
-    "w4-ocp": {
-      "commandName": "Project"
+    "w5-solid-lsp": {
+      "commandName": "Project",
+      "workingDirectory": "$(ProjectDir)"
     },
     "WSL": {
       "commandName": "WSL2",

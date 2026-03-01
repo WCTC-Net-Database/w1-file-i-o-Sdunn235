@@ -1,286 +1,207 @@
-﻿# Week 4: Open/Closed Principle (OCP) & Interfaces
+﻿# Week 5: Liskov Substitution (LSP) & Interface Segregation (ISP)
 
-> **Project Status:** ✅ **Completed** - All tasks and stretch goal (+10%) successfully implemented
+> **Template Purpose:** This template represents a working solution through Week 4. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
 
 ---
 
 ## Overview
 
-This project demonstrates the **Open/Closed Principle (OCP)**: software should be open for extension but closed for modification. I created an `IFileHandler` interface that combines reading and writing logic, then implemented it for both CSV and JSON formats. The key achievement is that adding JSON support required **zero modifications** to existing CSV code or the main program logic.
+This week covers two more SOLID principles: **Liskov Substitution Principle (LSP)** and **Interface Segregation Principle (ISP)**. You'll fix a design problem where a "fat" interface forces classes to implement methods they can't use, then create smaller, focused interfaces for specific behaviors. This week also introduces a simple **GameEngine** - a class that runs your game loop.
 
-## The Big Picture: Building Toward Databases
+## Learning Objectives
 
-```
-Week 3:  CharacterReader + CharacterWriter  (concrete classes, CSV only)
-            ↓
-Week 4:  IFileHandler  (interface!)
-            ├── CsvFileHandler   ← your Week 3 logic
-            └── JsonFileHandler  ← NEW!
-            ↓
-Week 9:  DbContext  (same pattern, but with SQL Server!)
-```
+By completing this assignment, you will:
+- [ ] Understand why LSP matters (substitutability)
+- [ ] Apply ISP by creating focused interfaces
+- [ ] Check if an object implements an interface using `is` keyword
+- [ ] Create a simple game engine class
 
-The pattern you learn this week - swapping implementations without changing business logic - is **exactly** how Entity Framework Core works. When you reach Week 9, you'll recognize the pattern immediately!
+## Prerequisites
 
----
-
-## What I Learned
-
-Through this project, I successfully:
-- ✅ **Applied the Open/Closed Principle** - Added JSON support without modifying existing CSV code
-- ✅ **Created an interface from existing classes** - `IFileHandler` abstracts file operations
-- ✅ **Implemented multiple format handlers** - Both CSV and JSON implementations
-- ✅ **Achieved runtime format switching** - User can switch formats without restarting (stretch goal)
-- ✅ **Practiced SOLID principles** - Single Responsibility and Open/Closed Principles throughout
-
-## Technologies Used
-
-- **.NET 10.0** - Latest .NET framework
-- **C# 14.0** - Modern C# with pattern matching and null-safety  
-- **CsvHelper** - Professional CSV parsing library
-- **System.Text.Json** - Built-in JSON serialization
-- **LINQ** - For querying character data
+Before starting, ensure you have:
+- [ ] Completed Week 4 assignment (or are using this template)
+- [ ] Working IFileHandler with CSV and JSON support
+- [ ] Understanding of interfaces
 
 ## What's New This Week
 
 | Concept | Description |
 |---------|-------------|
-| OCP | Open for extension, closed for modification |
-| Interface | A contract that classes must implement |
-| `IFileHandler` | Interface for all file operations |
-| `CsvFileHandler` | CSV implementation (your Week 3 code) |
-| `JsonFileHandler` | NEW: JSON implementation |
+| LSP | Subtypes must be substitutable for their base types |
+| ISP | Many small interfaces are better than one big interface |
+| `is` keyword | Check if object implements an interface |
+| `GameEngine` | Class that runs the main game loop |
+| Behavior interfaces | `IFlyable`, `IShootable`, etc. |
 
 ---
 
+## What's in This Template
+
+This template introduces several new classes. **Don't panic** - review them to understand the structure:
+
+```
+ConsoleRPG/
+├── Program.cs              # Entry point
+├── Services/
+│   └── GameEngine.cs       # NEW: Runs the game loop
+├── Models/
+│   ├── Character.cs        # Player character
+│   ├── Ghost.cs            # Can fly (implements IFlyable)
+│   └── Goblin.cs           # Cannot fly
+└── Interfaces/
+    ├── IEntity.cs          # Base interface for all entities
+    └── IFlyable.cs         # NEW: Interface for flying entities
+```
+
 ---
 
-## Implementation Details
+## Assignment Tasks
 
-### Task 1: IFileHandler Interface ✅
+### Task 1: Understand the LSP Problem
 
-**What I Did:**
-Created `Interfaces/IFileHandler.cs` that defines the contract for all file operations:
+**The Problem:**
+The current `IEntity` interface has a `Fly()` method, but not all entities can fly. Goblins can't fly, so they throw an exception or do nothing - violating LSP.
 
+**Example of LSP Violation:**
 ```csharp
-public interface IFileHandler
+public interface IEntity
 {
-    List<Character> ReadAll();
-    Character? FindByName(List<Character> characters, string name);
-    List<Character> FindByClass(List<Character> characters, string className);
-    void WriteAll(List<Character> characters);
-    void AppendCharacter(Character character);
+    void Attack();
+    void Fly();  // Problem: Not all entities can fly!
+}
+
+public class Goblin : IEntity
+{
+    public void Attack() { /* works */ }
+    public void Fly() { throw new NotSupportedException(); } // LSP violation!
 }
 ```
 
-**Key Design Decision:**
-Combined reading and writing in one interface because file handlers naturally do both operations. This mirrors how Entity Framework's `DbContext` works - one class handles all data operations.
-
-### Task 2: Implement CsvFileHandler
+### Task 2: Fix the LSP Violation
 
 **What to do:**
-- Create `CsvFileHandler.cs` that implements `IFileHandler`
-- Copy your Week 3 CharacterReader and CharacterWriter logic into this class
+- Remove `Fly()` from `IEntity`
+- Create a new `IFlyable` interface
+- Have only flying entities implement `IFlyable`
 
 **Example:**
 ```csharp
-public class CsvFileHandler : IFileHandler
+public interface IEntity
 {
-    private readonly string _filePath;
+    void Attack();
+    // No Fly() here!
+}
 
-    public CsvFileHandler(string filePath)
-    {
-        _filePath = filePath;
-    }
+public interface IFlyable
+{
+    void Fly();
+}
 
-    public List<Character> ReadAll()
-    {
-        // Your Week 3 CharacterReader.ReadAll() logic
-    }
+public class Ghost : IEntity, IFlyable
+{
+    public void Attack() { /* ghost attack */ }
+    public void Fly() { Console.WriteLine("Ghost floats through the air!"); }
+}
 
-    public void WriteAll(List<Character> characters)
-    {
-        // Your Week 3 CharacterWriter.WriteAll() logic
-    }
-
-    public void AppendCharacter(Character character)
-    {
-        // Your Week 3 CharacterWriter.AppendCharacter() logic
-    }
-
-    public Character? FindByName(List<Character> characters, string name)
-    {
-        // Your Week 3 LINQ logic
-        return characters.FirstOrDefault(c =>
-            c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public List<Character> FindByProfession(List<Character> characters, string profession)
-    {
-        // Your Week 3 LINQ logic
-        return characters.Where(c =>
-            c.Profession.Equals(profession, StringComparison.OrdinalIgnoreCase)).ToList();
-    }
+public class Goblin : IEntity
+{
+    public void Attack() { /* goblin attack */ }
+    // No Fly() - goblins can't fly, and that's okay!
 }
 ```
 
-### Task 3: Implement JsonFileHandler
+### Task 3: Update GameEngine to Check for Interfaces
 
 **What to do:**
-- Create `JsonFileHandler.cs` that implements `IFileHandler`
-- Use `System.Text.Json` for JSON handling
-- The LINQ methods (FindByName, FindByProfession) are IDENTICAL to CSV!
+- Use the `is` keyword to check if an entity can fly before calling Fly()
 
 **Example:**
 ```csharp
-using System.Text.Json;
-
-public class JsonFileHandler : IFileHandler
+public void ProcessEntity(IEntity entity)
 {
-    private readonly string _filePath;
-    private readonly JsonSerializerOptions _options = new() { WriteIndented = true };
+    entity.Attack(); // All entities can attack
 
-    public JsonFileHandler(string filePath)
+    // Only call Fly() if the entity can fly
+    if (entity is IFlyable flyingEntity)
     {
-        _filePath = filePath;
-    }
-
-    public List<Character> ReadAll()
-    {
-        string json = File.ReadAllText(_filePath);
-        return JsonSerializer.Deserialize<List<Character>>(json) ?? new List<Character>();
-    }
-
-    public void WriteAll(List<Character> characters)
-    {
-        string json = JsonSerializer.Serialize(characters, _options);
-        File.WriteAllText(_filePath, json);
-    }
-
-    public void AppendCharacter(Character character)
-    {
-        // JSON doesn't support simple append - must read, add, write
-        var characters = ReadAll();
-        characters.Add(character);
-        WriteAll(characters);
-    }
-
-    // LINQ methods are identical to CSV - the interface ensures consistency!
-    public Character? FindByName(List<Character> characters, string name)
-    {
-        return characters.FirstOrDefault(c =>
-            c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
-    }
-
-    public List<Character> FindByProfession(List<Character> characters, string profession)
-    {
-        return characters.Where(c =>
-            c.Profession.Equals(profession, StringComparison.OrdinalIgnoreCase)).ToList();
+        flyingEntity.Fly();
     }
 }
 ```
 
-### Task 4: Update Program to Use Interface
+### Task 4: Create Two New Classes with Behaviors
 
 **What to do:**
-- Declare your file handler as `IFileHandler` type
-- The program doesn't care which implementation it's using!
+- Create at least two new entity classes
+- Design focused interfaces for their unique abilities
+- Integrate them into the GameEngine
 
-**Example:**
+**Examples:**
 ```csharp
-// Program uses interface - it doesn't know (or care) if it's CSV or JSON!
-IFileHandler fileHandler = new JsonFileHandler("input.json");
-var characters = fileHandler.ReadAll();
+public interface IShootable
+{
+    void Shoot();
+}
 
-// Later...
-fileHandler.WriteAll(characters);
+public class Archer : IEntity, IShootable
+{
+    public void Attack() { /* basic attack */ }
+    public void Shoot() { Console.WriteLine("Archer fires an arrow!"); }
+}
 ```
 
 ---
 
 ## Stretch Goal (+10%)
 
-**Switch Formats at Runtime**
+**Implement the Command Pattern**
 
-Add a menu option to switch between CSV and JSON without restarting:
-
-```
-1. Display Characters
-2. Find Character
-3. Add Character
-4. Level Up Character
-5. Switch File Format (CSV/JSON)
-0. Exit
-```
+Create commands that encapsulate actions:
 
 ```csharp
-// Switch handler based on user choice
-if (userChoice == "json")
-    fileHandler = new JsonFileHandler("input.json");
-else
-    fileHandler = new CsvFileHandler("input.csv");
+public interface ICommand
+{
+    void Execute();
+}
+
+public class AttackCommand : ICommand
+{
+    private IEntity _entity;
+    public AttackCommand(IEntity entity) { _entity = entity; }
+    public void Execute() { _entity.Attack(); }
+}
+
+// Usage in GameEngine:
+var commands = new List<ICommand>();
+commands.Add(new AttackCommand(goblin));
+commands.Add(new FlyCommand(ghost));
+foreach (var cmd in commands) cmd.Execute();
 ```
 
 ---
 
-## JSON File Format
+## Why This Matters
 
-Your JSON file should look like:
-```json
-[
-  {
-    "Name": "John",
-    "Profession": "Fighter",
-    "Level": 1,
-    "HP": 10,
-    "Equipment": ["sword", "shield", "potion"]
-  },
-  {
-    "Name": "Jane",
-    "Profession": "Wizard",
-    "Level": 2,
-    "HP": 6,
-    "Equipment": ["staff", "robe", "book"]
-  }
-]
-```
-
----
-
-## Project Structure
-
-```
-YourProjectName/
-├── Program.cs                    # Uses IFileHandler interface
-├── Models/
-│   └── Character.cs              # Same as Week 3
-├── Interfaces/
-│   └── IFileHandler.cs           # NEW: The interface
-├── Services/
-│   ├── CsvFileHandler.cs         # CSV implementation (Week 3 code)
-│   └── JsonFileHandler.cs        # NEW: JSON implementation
-└── Files/
-    ├── input.csv                 # CSV data file
-    └── input.json                # JSON data file
-```
-
----
-
-## The Power of OCP
-
-**Before (violates OCP):**
+**LSP in Practice:**
 ```csharp
-// Adding XML support requires modifying existing code
-if (format == "csv") { /* csv logic */ }
-else if (format == "json") { /* json logic */ }
-else if (format == "xml") { /* must add here - MODIFYING! */ }
+// This should work with ANY IEntity
+void ProcessEntities(List<IEntity> entities)
+{
+    foreach (var entity in entities)
+    {
+        entity.Attack(); // Safe - all entities can attack
+        // entity.Fly();  // NOT safe - not all entities can fly!
+    }
+}
 ```
 
-**After (follows OCP):**
+**ISP in Practice:**
 ```csharp
-// Adding XML support = create new class, no existing code changes!
-IFileHandler handler = new XmlFileHandler("input.xml");  // Just add new class!
-// CsvFileHandler and JsonFileHandler are UNTOUCHED
+// Small, focused interfaces = flexibility
+public class Dragon : IEntity, IFlyable, IBreathable
+{
+    // Implements exactly what it needs
+}
 ```
 
 ---
@@ -289,50 +210,32 @@ IFileHandler handler = new XmlFileHandler("input.xml");  // Just add new class!
 
 | Criteria | Points | Description |
 |----------|--------|-------------|
-| IFileHandler Interface | 20 | Properly defined with all methods |
-| CsvFileHandler | 25 | Correctly implements interface with Week 3 logic |
-| JsonFileHandler | 25 | Correctly implements interface for JSON |
-| OCP Compliance | 15 | Program uses interface, not concrete classes |
-| LINQ Methods | 5 | FindByName and FindByProfession work correctly |
-| Code Quality | 10 | Clean, readable, follows patterns |
+| LSP Fix | 30 | Removed Fly() from IEntity, created IFlyable |
+| GameEngine Update | 20 | Correctly checks for IFlyable before calling Fly() |
+| New Classes | 20 | Created 2+ classes with focused interfaces |
+| ISP Compliance | 10 | Interfaces are small and focused |
+| Integration | 10 | Everything works together in GameEngine |
+| Code Quality | 10 | Clean, readable, well-commented |
 | **Total** | **100** | |
-| **Stretch: Format Switching** | **+10** | Switch formats via menu at runtime |
+| **Stretch: Command Pattern** | **+10** | Implemented command pattern for actions |
 
 ---
 
 ## How This Connects to the Final Project
 
-This is important - the pattern you're learning here **evolves** through the semester:
-
-| Week | Pattern | What It Does |
-|------|---------|--------------|
-| Week 4 | `IFileHandler` | Single entity (Characters), CSV/JSON |
-| Week 7 | `IContext` | Multiple entities + `SaveChanges()` |
-| Week 9 | `DbContext` | Real database with EF Core |
-
-**The progression:**
-```
-IFileHandler (this week)
-    └── ReadAll(), WriteAll(), Find methods for Characters
-            ↓
-IContext (Week 7 midterm prep)
-    └── Players, Monsters, Items + SaveChanges()
-            ↓
-DbContext (Week 9)
-    └── DbSet<Player>, DbSet<Monster> + SaveChanges()
-```
-
-When you learn Entity Framework Core, you'll recognize the pattern immediately!
+- LSP ensures your entity hierarchy works correctly
+- ISP creates the ability/behavior interfaces used throughout
+- The GameEngine pattern continues through the final project
+- These patterns make your code extensible without modification
 
 ---
 
 ## Tips
 
-- Start by creating the interface - list all methods from Week 3's Reader + Writer
-- Implement CSV first (it's just your Week 3 code reorganized)
-- JSON is easier to debug (human-readable format)
-- Use `JsonSerializerOptions { WriteIndented = true }` for readable JSON output
-- The LINQ methods (FindByName, FindByProfession) are IDENTICAL across implementations!
+- Start by understanding the existing code before modifying
+- Draw a diagram of your interfaces and classes
+- Test with a simple scenario: process a list with Ghost and Goblin
+- The `is` keyword is your friend for checking interface implementation
 
 ---
 
@@ -346,9 +249,10 @@ When you learn Entity Framework Core, you'll recognize the pattern immediately!
 
 ## Resources
 
-- [C# Interfaces](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/interfaces/)
-- [System.Text.Json](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-overview)
-- [Open/Closed Principle](https://stackify.com/solid-design-open-closed-principle/)
+- [Liskov Substitution Principle](https://stackify.com/solid-design-liskov-substitution-principle/)
+- [Interface Segregation Principle](https://www.baeldung.com/cs/interface-segregation-principle)
+- [C# `is` Keyword](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/is)
+- [Command Pattern](https://refactoring.guru/design-patterns/command/csharp/example)
 
 ---
 
@@ -356,4 +260,4 @@ When you learn Entity Framework Core, you'll recognize the pattern immediately!
 
 - Post questions in the Canvas discussion board
 - Attend office hours
-- Review the in-class repository for additional examples
+- Review the in-class repository for additional examplesonal examples

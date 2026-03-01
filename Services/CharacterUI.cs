@@ -1,6 +1,7 @@
-using W4Ocp.Interfaces;
+using W5SolidLsp.Interfaces;
+using W5SolidLsp.Models.Characters;
 
-namespace W4Ocp.Services;
+namespace W5SolidLsp.Services;
 
 /// <summary>
 /// Responsible for all character-related console interactions.

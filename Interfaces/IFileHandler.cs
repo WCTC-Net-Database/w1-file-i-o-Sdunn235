@@ -1,4 +1,6 @@
-namespace W4Ocp.Interfaces;
+using W5SolidLsp.Models.Characters;
+
+namespace W5SolidLsp.Interfaces;
 
 /// <summary>
 /// Interface that defines the contract for file handling operations.

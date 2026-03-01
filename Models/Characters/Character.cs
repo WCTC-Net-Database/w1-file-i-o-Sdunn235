@@ -1,31 +1,28 @@
+namespace W5SolidLsp.Models.Characters;
+
 /// <summary>
-/// Represents a Console RPG character with basic attributes and equipment.
+/// Represents the base data for any character in the game — player or NPC.
+/// Kept concrete (non-abstract) so CsvHelper can instantiate it directly for file I/O.
+/// All entities in the game derive from this class.
+///
+/// Core design philosophy: anything a Player can do, an NPC can do too.
+/// Capabilities are granted by interfaces (IEntity, IFlyable, etc.), not by class position.
 /// </summary>
 public class Character
 {
-    /// <summary>
-    /// The character's name.
-    /// </summary>
+    /// <summary>The character's name.</summary>
     public string Name { get; set; }
 
-    /// <summary>
-    /// The character's class (e.g., Fighter, Wizard, Rogue, etc.).
-    /// </summary>
+    /// <summary>The character's class/role (e.g., Fighter, Wizard, Rogue).</summary>
     public string Class { get; set; }
 
-    /// <summary>
-    /// The character's current level.
-    /// </summary>
+    /// <summary>The character's current level.</summary>
     public int Level { get; set; }
 
-    /// <summary>
-    /// The character's current hit points (health).
-    /// </summary>
+    /// <summary>The character's current hit points (health).</summary>
     public int Hp { get; set; }
 
-    /// <summary>
-    /// Pipe-delimited list of equipment items the character is carrying.
-    /// </summary>
+    /// <summary>Pipe-delimited list of equipment items the character is carrying.</summary>
     public string Equipment { get; set; }
 
     /// <summary>
@@ -42,17 +39,13 @@ public class Character
             .ToList();
     }
 
-    /// <summary>
-    /// Provides a formatted string representation of the character.
-    /// </summary>
+    /// <summary>Provides a formatted string representation of the character.</summary>
     public override string ToString()
     {
         return $"[{Level}] {Name} ({Class}) | HP: {Hp} | Equipment: {Equipment}";
     }
 
-    /// <summary>
-    /// Creates a new Character instance.
-    /// </summary>
+    /// <summary>Creates a new Character instance with default empty values.</summary>
     public Character()
     {
         Name = string.Empty;
@@ -60,9 +53,7 @@ public class Character
         Equipment = string.Empty;
     }
 
-    /// <summary>
-    /// Creates a new Character instance with the specified values.
-    /// </summary>
+    /// <summary>Creates a new Character instance with the specified values.</summary>
     public Character(string name, string charClass, int level, int hp, string equipment)
     {
         Name = name;

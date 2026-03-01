@@ -1,7 +1,8 @@
 using System.Text.Json;
-using W4Ocp.Interfaces;
+using W5SolidLsp.Interfaces;
+using W5SolidLsp.Models.Characters;
 
-namespace W4Ocp.Services;
+namespace W5SolidLsp.Services;
 
 /// <summary>
 /// JSON implementation of IFileHandler.

@@ -1,4 +1,4 @@
-namespace W4Ocp.Services;
+namespace W5SolidLsp.Services;
 
 /// <summary>
 /// Responsible for displaying menus and getting user choices.
@@ -36,7 +36,7 @@ public class MenuService
     public void DisplayWelcome()
     {
         Console.WriteLine("=== Console RPG Character Manager ===");
-        Console.WriteLine("Week 4: Open/Closed Principle\n");
+        Console.WriteLine("Week 5: LSP & ISP\n");
     }
 
     /// <summary>
