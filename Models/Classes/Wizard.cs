@@ -1,11 +1,10 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// Wizard — a spellcasting class that attacks with magic and can fly via levitation.
-/// Corresponds to the "Wizard" class in the character data files.
+/// Wizard - a spellcasting class that attacks with magic and can fly via levitation.
 /// Implements IEntity (arcane attack) and IFlyable (magical levitation).
 /// </summary>
 public class Wizard : Character, IEntity, IFlyable
@@ -20,4 +19,10 @@ public class Wizard : Character, IEntity, IFlyable
 
     public void Fly() =>
         Console.WriteLine($"{Name} rises off the ground on a shimmering magical current!");
+
+    /// <summary>Wizard releases a burst of arcane energy in all directions.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} channels raw arcane power and releases a devastating area-burst spell!");
+    }
 }

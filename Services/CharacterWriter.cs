@@ -1,13 +1,13 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Services;
+namespace W6DependencyInversion.Services;
 
 /// <summary>
 /// Responsible for writing Character data to CSV files.
-/// This class follows the Single Responsibility Principle and Open/Closed Principle.
+/// Kept as a standalone helper class; main file I/O goes through CsvFileHandler.
 /// </summary>
 public class CharacterWriter
 {
@@ -17,7 +17,6 @@ public class CharacterWriter
     /// <summary>
     /// Initializes a new instance of CharacterWriter with the specified file path.
     /// </summary>
-    /// <param name="filePath">The path to the CSV file to write to.</param>
     public CharacterWriter(string filePath)
     {
         _filePath = filePath;
@@ -30,39 +29,36 @@ public class CharacterWriter
 
     /// <summary>
     /// Writes all characters to the CSV file, replacing any existing content.
-    /// This is useful when you need to update the entire file (like after leveling up a character).
+    /// Accepts CharacterBase references; converts to Character records for CsvHelper.
     /// </summary>
-    /// <param name="characters">The list of characters to write.</param>
-    public void WriteAll(List<Character> characters)
+    public void WriteAll(List<CharacterBase> characters)
     {
+        var records = characters.Select(c => new Character(c.Name, c.Class, c.Level, c.Hp, c.Equipment)).ToList();
         using StreamWriter writer = new(_filePath, false);
         using CsvWriter csv = new(writer, _csvConfig);
         csv.Context.RegisterClassMap<CharacterMap>();
-        csv.WriteRecords(characters);
+        csv.WriteRecords(records);
     }
 
     /// <summary>
     /// Appends a single character to the end of the CSV file.
-    /// This is more efficient than rewriting the entire file when adding one character.
     /// </summary>
-    /// <param name="character">The character to append.</param>
-    public void AppendCharacter(Character character)
+    public void AppendCharacter(CharacterBase character)
     {
-        // Check if file exists to determine if we need to write headers
         bool fileExists = File.Exists(_filePath);
-        
+        var record = new Character(character.Name, character.Class, character.Level, character.Hp, character.Equipment);
+
         using StreamWriter writer = new(_filePath, append: true);
         using CsvWriter csv = new(writer, _csvConfig);
         csv.Context.RegisterClassMap<CharacterMap>();
-        
-        // Only write header if file doesn't exist
+
         if (!fileExists)
         {
             csv.WriteHeader<Character>();
             csv.NextRecord();
         }
-        
-        csv.WriteRecord(character);
+
+        csv.WriteRecord(record);
         csv.NextRecord();
     }
 }

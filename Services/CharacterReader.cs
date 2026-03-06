@@ -1,13 +1,13 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Services;
+namespace W6DependencyInversion.Services;
 
 /// <summary>
 /// Responsible for reading Character data from CSV files.
-/// This class follows the Single Responsibility Principle and Open/Closed Principle.
+/// Kept as a standalone helper class; main file I/O goes through CsvFileHandler.
 /// </summary>
 public class CharacterReader
 {
@@ -17,7 +17,6 @@ public class CharacterReader
     /// <summary>
     /// Initializes a new instance of CharacterReader with the specified file path.
     /// </summary>
-    /// <param name="filePath">The path to the CSV file to read from.</param>
     public CharacterReader(string filePath)
     {
         _filePath = filePath;
@@ -29,44 +28,37 @@ public class CharacterReader
     }
 
     /// <summary>
-    /// Reads all characters from the CSV file.
+    /// Reads all characters from the CSV file as CharacterBase references.
     /// </summary>
-    /// <returns>A list of all characters in the file, or an empty list if file doesn't exist.</returns>
-    public List<Character> ReadAll()
+    public List<CharacterBase> ReadAll()
     {
         if (!File.Exists(_filePath))
         {
-            return new List<Character>();
+            return new List<CharacterBase>();
         }
 
         using StreamReader reader = new(_filePath);
         using CsvReader csv = new(reader, _csvConfig);
         csv.Context.RegisterClassMap<CharacterMap>();
-        return csv.GetRecords<Character>().ToList();
+        return csv.GetRecords<Character>().Cast<CharacterBase>().ToList();
     }
 
     /// <summary>
     /// Finds a character by name using LINQ's FirstOrDefault.
-    /// This is case-insensitive for better user experience.
     /// </summary>
-    /// <param name="name">The name of the character to find.</param>
-    /// <returns>The first character with matching name, or null if not found.</returns>
-    public Character? FindByName(string name)
+    public CharacterBase? FindByName(string name)
     {
-        List<Character> characters = ReadAll();
-        return characters.FirstOrDefault(c => 
+        List<CharacterBase> characters = ReadAll();
+        return characters.FirstOrDefault(c =>
             c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
     /// Finds all characters of a specific class using LINQ's Where.
-    /// This is case-insensitive for better user experience.
     /// </summary>
-    /// <param name="className">The class name to filter by.</param>
-    /// <returns>A list of all characters with the matching class.</returns>
-    public List<Character> FindByClass(string className)
+    public List<CharacterBase> FindByClass(string className)
     {
-        List<Character> characters = ReadAll();
+        List<CharacterBase> characters = ReadAll();
         return characters
             .Where(c => c.Class.Equals(className, StringComparison.OrdinalIgnoreCase))
             .ToList();

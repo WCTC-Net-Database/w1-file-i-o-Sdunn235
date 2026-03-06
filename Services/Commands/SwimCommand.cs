@@ -1,6 +1,6 @@
-using W5SolidLsp.Interfaces;
+using W6DependencyInversion.Interfaces;
 
-namespace W5SolidLsp.Services.Commands;
+namespace W6DependencyInversion.Services.Commands;
 
 /// <summary>Encapsulates a Swim action for any ISwimmable entity (Command Pattern).</summary>
 public class SwimCommand : ICommand

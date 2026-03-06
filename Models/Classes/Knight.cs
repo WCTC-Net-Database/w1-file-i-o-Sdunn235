@@ -1,11 +1,10 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// Knight — a mounted, heavily armored warrior who attacks and holds the line.
-/// Corresponds to the "Knight" class in the character data files.
+/// Knight - a mounted, heavily armored warrior who attacks and holds the line.
 /// Implements IEntity (lance charge) and IDefendable (shield wall).
 /// </summary>
 public class Knight : Character, IEntity, IDefendable
@@ -20,4 +19,10 @@ public class Knight : Character, IEntity, IDefendable
 
     public void Defend() =>
         Console.WriteLine($"{Name} plants their feet and raises a disciplined shield wall!");
+
+    /// <summary>Knight issues a rallying cry that inspires all nearby allies.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} raises their banner high and issues a rallying cry, inspiring all nearby allies!");
+    }
 }

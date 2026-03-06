@@ -1,17 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// An archer — a ranged combat specialist who can attack and shoot.
+/// Archer - a ranged combat specialist who can attack and shoot.
 /// Implements IEntity (basic attack) and IShootable (ranged shot).
-///
-/// Note: Models/Classes/ holds RPG class templates (like D&D classes), not C# classes in the OOP sense.
-/// These will eventually power a character creation system where a Player picks a CharacterClass.
-/// For now, Archer acts as a standalone IEntity for GameEngine demonstration.
-///
-/// ISP demo: Archer implements exactly what it needs — nothing more.
 /// </summary>
 public class Archer : Character, IEntity, IShootable
 {
@@ -30,5 +24,11 @@ public class Archer : Character, IEntity, IShootable
     public void Shoot()
     {
         Console.WriteLine($"{Name} draws the bowstring and fires an arrow!");
+    }
+
+    /// <summary>Archer fires a volley of arrows in a wide arc.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} nocks three arrows at once and releases a devastating volley!");
     }
 }

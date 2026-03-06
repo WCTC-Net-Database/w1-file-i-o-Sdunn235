@@ -1,14 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Monsters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Monsters;
+namespace W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
 /// <summary>
-/// A ghost — a hostile, undead spirit that can fly.
+/// A ghost - a hostile, undead spirit that can fly.
 /// Implements IEntity (can attack) and IFlyable (can fly).
-///
-/// LSP demo: Ghost safely substitutes for IEntity anywhere.
-/// ISP demo: Ghost only implements interfaces it genuinely supports.
 /// </summary>
 public class Ghost : Monster, IEntity, IFlyable
 {
@@ -27,5 +24,11 @@ public class Ghost : Monster, IEntity, IFlyable
     public void Fly()
     {
         Console.WriteLine($"{Name} drifts silently through the air!");
+    }
+
+    /// <summary>Ghost phases through a solid object, becoming briefly intangible.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} phases through solid matter, becoming completely intangible!");
     }
 }

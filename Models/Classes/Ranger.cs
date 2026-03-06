@@ -1,13 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// Ranger — a wilderness scout comfortable in any terrain.
-/// Corresponds to the "Ranger" class in the character data files.
-/// Implements IEntity (melee strike), IShootable (ranged shot), and ISwimmable
-/// (rangers operate in swamps, rivers, and coastlines).
+/// Ranger - a wilderness scout comfortable in any terrain.
+/// Implements IEntity (melee strike), IShootable (ranged shot), and ISwimmable.
 /// </summary>
 public class Ranger : Character, IEntity, IShootable, ISwimmable
 {
@@ -24,4 +22,10 @@ public class Ranger : Character, IEntity, IShootable, ISwimmable
 
     public void Swim() =>
         Console.WriteLine($"{Name} slips into the water and moves through it with practiced ease!");
+
+    /// <summary>Ranger sets a trap that ensnares enemies attempting to pass through.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} swiftly sets a hidden trap, ready to ensnare any enemy who steps near!");
+    }
 }

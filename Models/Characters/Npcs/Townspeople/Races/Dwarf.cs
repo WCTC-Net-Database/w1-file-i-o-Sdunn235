@@ -1,16 +1,15 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Townspeople;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters.Npcs.Townspeople;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople.Races;
+namespace W6DependencyInversion.Models.Characters.Npcs.Townspeople.Races;
 
 /// <summary>
-/// Dwarf — a stout, resilient race built for underground labor and combat.
-/// Dwarves live in mountain halls and mining towns.
-/// IDefendable is a racial trait — their stocky build makes them natural defenders.
+/// Dwarf - a stout, resilient race built for underground labor and combat.
+/// IDefendable is a racial trait - their stocky build makes them natural defenders.
 /// </summary>
 public class Dwarf : Townsperson, IDefendable
 {
-    public string RacialTrait => "Resilient — naturally resistant to physical damage and knockback.";
+    public string RacialTrait => "Resilient - naturally resistant to physical damage and knockback.";
 
     public Dwarf() : base() { }
 
@@ -19,4 +18,10 @@ public class Dwarf : Townsperson, IDefendable
 
     public void Defend() =>
         Console.WriteLine($"{Name} digs in with powerful legs and shrugs off the blow!");
+
+    /// <summary>Dwarf strikes the earth to trigger a tremor, knocking enemies off balance.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} stamps the ground with tremendous force, sending a shockwave through the earth!");
+    }
 }

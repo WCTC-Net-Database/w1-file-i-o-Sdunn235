@@ -1,13 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// Rogue — a stealthy class that strikes from the shadows.
-/// Corresponds to the "Rogue" class in the character data files.
+/// Rogue - a stealthy class that strikes from the shadows.
 /// Implements IEntity (sneak attack) only.
-/// Future: IStealthable when that interface is built.
 /// </summary>
 public class Rogue : Character, IEntity
 {
@@ -18,4 +16,10 @@ public class Rogue : Character, IEntity
 
     public void Attack() =>
         Console.WriteLine($"{Name} slips from the shadows and lands a precise dagger strike!");
+
+    /// <summary>Rogue poisons their blade with a fast-acting toxin.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} coats their blade in a fast-acting poison, ready to strike a vital point!");
+    }
 }

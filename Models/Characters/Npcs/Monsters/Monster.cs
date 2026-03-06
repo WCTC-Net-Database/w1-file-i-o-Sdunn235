@@ -1,12 +1,11 @@
-using W5SolidLsp.Models.Characters.Npcs;
+using W6DependencyInversion.Models.Characters.Npcs;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Monsters;
+namespace W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
 /// <summary>
 /// Abstract base class for all hostile monster NPCs.
-/// Derives from Npc — monsters are NPCs that are hostile by default.
-/// Concrete monsters (Ghost, Goblin, Troll) derive from this class and
-/// implement IEntity plus any additional behavior interfaces they support.
+/// Derives from Npc (which derives from Character and CharacterBase).
+/// Monsters default to Hostile faction.
 /// </summary>
 public abstract class Monster : Npc
 {
