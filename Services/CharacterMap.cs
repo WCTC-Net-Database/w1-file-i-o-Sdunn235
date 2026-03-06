@@ -1,11 +1,12 @@
 using CsvHelper.Configuration;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Characters;
+namespace W6DependencyInversion.Services;
 
 /// <summary>
 /// Defines the CSV column mapping for the Character class.
-/// Used by CsvHelper to read and write CSV files correctly.
+/// Kept in the Services layer so that the Models layer has no CsvHelper dependency.
+/// Used by CsvFileHandler to read and write CSV files correctly.
 /// </summary>
 public sealed class CharacterMap : ClassMap<Character>
 {

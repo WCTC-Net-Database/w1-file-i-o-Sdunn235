@@ -1,6 +1,6 @@
-using W5SolidLsp.Interfaces;
+using W6DependencyInversion.Interfaces;
 
-namespace W5SolidLsp.Services.Commands;
+namespace W6DependencyInversion.Services.Commands;
 
 /// <summary>Encapsulates a Fly action for any IFlyable entity (Command Pattern).</summary>
 public class FlyCommand : ICommand

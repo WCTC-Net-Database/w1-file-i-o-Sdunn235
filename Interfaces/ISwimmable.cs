@@ -1,4 +1,4 @@
-namespace W5SolidLsp.Interfaces;
+namespace W6DependencyInversion.Interfaces;
 
 /// <summary>
 /// Interface for entities that can swim.

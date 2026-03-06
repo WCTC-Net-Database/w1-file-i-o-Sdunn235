@@ -1,11 +1,10 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// Fighter — a heavily armored melee combatant who attacks and defends.
-/// Corresponds to the "Fighter" class in the character data files.
+/// Fighter - a heavily armored melee combatant who attacks and defends.
 /// Implements IEntity (melee attack) and IDefendable (shield stance).
 /// </summary>
 public class Fighter : Character, IEntity, IDefendable
@@ -20,4 +19,10 @@ public class Fighter : Character, IEntity, IDefendable
 
     public void Defend() =>
         Console.WriteLine($"{Name} raises their shield and braces for impact!");
+
+    /// <summary>Fighter unleashes a powerful battle cry that boosts their attack.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} lets out a battle cry and enters a combat stance, ready for anything!");
+    }
 }

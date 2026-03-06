@@ -1,12 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Services;
+namespace W6DependencyInversion.Services;
 
 /// <summary>
 /// Responsible for all character-related console interactions.
-/// This class follows the Single Responsibility Principle and Open/Closed Principle.
-/// Now uses IFileHandler interface - it doesn't care if it's CSV, JSON, or any other format!
+/// Depends on IFileHandler (abstraction) and CharacterBase (abstraction) - DIP compliant.
 /// </summary>
 public class CharacterUI
 {
@@ -28,7 +27,7 @@ public class CharacterUI
     {
         Console.WriteLine("\n=== All Characters ===\n");
 
-        List<Character> characters = _fileHandler.ReadAll();
+        List<CharacterBase> characters = _fileHandler.ReadAll();
 
         if (characters.Count == 0)
         {
@@ -36,8 +35,7 @@ public class CharacterUI
             return;
         }
 
-        // Display each character's information with clear formatting
-        foreach (Character character in characters)
+        foreach (CharacterBase character in characters)
         {
             DisplayCharacterDetails(character);
             Console.WriteLine("-------------------------");
@@ -48,7 +46,6 @@ public class CharacterUI
 
     /// <summary>
     /// Prompts user for a character name and displays the matching character if found.
-    /// Uses LINQ through the IFileHandler interface.
     /// </summary>
     public void FindCharacter()
     {
@@ -63,9 +60,8 @@ public class CharacterUI
             return;
         }
 
-        // Get all characters and use LINQ through the file handler
-        List<Character> characters = _fileHandler.ReadAll();
-        Character? character = _fileHandler.FindByName(characters, name);
+        List<CharacterBase> characters = _fileHandler.ReadAll();
+        CharacterBase? character = _fileHandler.FindByName(characters, name);
 
         if (character == null)
         {
@@ -85,7 +81,6 @@ public class CharacterUI
     {
         Console.WriteLine("\n=== Add New Character ===\n");
 
-        // Collect all character information from user input
         Console.Write("Enter character name: ");
         string? name = Console.ReadLine();
 
@@ -101,8 +96,7 @@ public class CharacterUI
         Console.Write("Enter equipment (separated by |, e.g., sword|shield): ");
         string? equipment = Console.ReadLine();
 
-        // Create new character object with input validation
-        Character newCharacter = new()
+        CharacterBase newCharacter = new Character
         {
             Name = name ?? string.Empty,
             Class = characterClass ?? string.Empty,
@@ -111,7 +105,6 @@ public class CharacterUI
             Equipment = equipment ?? string.Empty
         };
 
-        // Use IFileHandler to append the new character
         _fileHandler.AppendCharacter(newCharacter);
 
         Console.WriteLine($"\nCharacter '{name}' has been added successfully!");
@@ -124,7 +117,6 @@ public class CharacterUI
     {
         Console.WriteLine("\n=== Level Up Character ===\n");
 
-        // Get the character name to find and level up
         Console.Write("Enter character name to level up: ");
         string? nameToFind = Console.ReadLine();
 
@@ -134,13 +126,11 @@ public class CharacterUI
             return;
         }
 
-        // Load all character records using IFileHandler
-        List<Character> characters = _fileHandler.ReadAll();
+        List<CharacterBase> characters = _fileHandler.ReadAll();
         bool characterFound = false;
 
-        foreach (Character character in characters)
+        foreach (CharacterBase character in characters)
         {
-            // Compare character names (case-insensitive for better UX)
             if (character.Name.Equals(nameToFind, StringComparison.OrdinalIgnoreCase))
             {
                 characterFound = true;
@@ -150,29 +140,25 @@ public class CharacterUI
             }
         }
 
-        // If character was not found, inform user and exit early
         if (!characterFound)
         {
             Console.WriteLine($"\nCharacter '{nameToFind}' not found.");
             return;
         }
 
-        // Write the modified list back to file using IFileHandler
         _fileHandler.WriteAll(characters);
     }
 
     /// <summary>
     /// Helper method to display a single character's details.
     /// </summary>
-    /// <param name="character">The character to display.</param>
-    private void DisplayCharacterDetails(Character character)
+    private static void DisplayCharacterDetails(CharacterBase character)
     {
         Console.WriteLine($"Name: {character.Name}");
         Console.WriteLine($"Class: {character.Class}");
         Console.WriteLine($"Level: {character.Level}");
         Console.WriteLine($"HP: {character.Hp}");
 
-        // Use the Character's method to get equipment list
         List<string> equipmentItems = character.GetEquipmentList();
         Console.WriteLine($"Equipment: {string.Join(", ", equipmentItems)}");
     }

@@ -1,8 +1,8 @@
-namespace W5SolidLsp.Services;
+namespace W6DependencyInversion.Services;
 
 /// <summary>
 /// Responsible for displaying menus and getting user choices.
-/// This class follows the Single Responsibility Principle and Open/Closed Principle.
+/// This class follows the Single Responsibility Principle.
 /// </summary>
 public class MenuService
 {
@@ -23,7 +23,6 @@ public class MenuService
     /// <summary>
     /// Gets the user's menu choice from console input.
     /// </summary>
-    /// <returns>The user's menu choice as a string.</returns>
     public string GetMenuChoice()
     {
         Console.Write("\nEnter your choice: ");
@@ -36,7 +35,7 @@ public class MenuService
     public void DisplayWelcome()
     {
         Console.WriteLine("=== Console RPG Character Manager ===");
-        Console.WriteLine("Week 5: LSP & ISP\n");
+        Console.WriteLine("Week 6: Dependency Inversion Principle\n");
     }
 
     /// <summary>
@@ -68,7 +67,6 @@ public class MenuService
     /// <summary>
     /// Displays the file format selection menu and gets the user's choice.
     /// </summary>
-    /// <returns>The selected format as a string ("csv" or "json"), or empty string if cancelled.</returns>
     public string GetFileFormatChoice()
     {
         Console.WriteLine("\n=== Switch File Format ===");
@@ -76,9 +74,9 @@ public class MenuService
         Console.WriteLine("2. JSON Format");
         Console.WriteLine("0. Cancel");
         Console.Write("\nEnter your choice: ");
-        
+
         string choice = Console.ReadLine() ?? string.Empty;
-        
+
         return choice switch
         {
             "1" => "csv",
@@ -91,10 +89,9 @@ public class MenuService
     /// <summary>
     /// Displays a success message when the file format is changed.
     /// </summary>
-    /// <param name="format">The new file format (CSV or JSON).</param>
     public void DisplayFormatChanged(string format)
     {
-        Console.WriteLine($"\n✓ File format successfully changed to {format.ToUpper()}");
+        Console.WriteLine($"\n File format successfully changed to {format.ToUpper()}");
     }
 
     /// <summary>

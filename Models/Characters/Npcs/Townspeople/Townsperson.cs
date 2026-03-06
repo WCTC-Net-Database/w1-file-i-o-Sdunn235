@@ -1,18 +1,10 @@
-using W5SolidLsp.Models.Characters.Npcs;
+using W6DependencyInversion.Models.Characters.Npcs;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople;
+namespace W6DependencyInversion.Models.Characters.Npcs.Townspeople;
 
 /// <summary>
 /// Abstract base class for friendly or neutral NPC townspeople.
-/// Derives from Npc — townspeople share the same Character base as monsters and the player.
-///
-/// Townspeople default to Neutral faction. They CAN implement IEntity and fight
-/// if the game calls for it — anything the player can do, an NPC can do too.
-///
-/// Races (Elf, Dwarf, Human, Orc, etc.) derive from Townsperson.
-/// A race defines appearance and lore, not capability — capabilities come from interfaces.
-///
-/// NOTE: Townsperson and Races are Brain Dump / future week content.
+/// Derives from Npc. Townspeople default to Neutral faction.
 /// </summary>
 public abstract class Townsperson : Npc
 {

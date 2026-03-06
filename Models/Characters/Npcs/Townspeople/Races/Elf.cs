@@ -1,16 +1,15 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Townspeople;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters.Npcs.Townspeople;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople.Races;
+namespace W6DependencyInversion.Models.Characters.Npcs.Townspeople.Races;
 
 /// <summary>
-/// Elf — an ancient, graceful race with a natural affinity for magic and the sky.
-/// Elves commonly live in forest settlements and cities.
-/// IFlyable is a racial trait — any elf, regardless of CharacterClass, can fly.
+/// Elf - an ancient, graceful race with a natural affinity for magic and the sky.
+/// IFlyable is a racial trait - any elf can fly.
 /// </summary>
 public class Elf : Townsperson, IFlyable
 {
-    public string RacialTrait => "Graceful — natural affinity for magic and aerial movement.";
+    public string RacialTrait => "Graceful - natural affinity for magic and aerial movement.";
 
     public Elf() : base() { }
 
@@ -19,4 +18,10 @@ public class Elf : Townsperson, IFlyable
 
     public void Fly() =>
         Console.WriteLine($"{Name} rises gracefully on a current of magical wind!");
+
+    /// <summary>Elf communes with nature spirits for guidance and protection.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} communes with the ancient forest spirits, gaining insight and protection!");
+    }
 }

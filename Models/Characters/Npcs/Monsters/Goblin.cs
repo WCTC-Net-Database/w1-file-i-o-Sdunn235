@@ -1,14 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Monsters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Monsters;
+namespace W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
 /// <summary>
-/// A goblin — a small, hostile creature that attacks with crude weapons.
+/// A goblin - a small, hostile creature that attacks with crude weapons.
 /// Implements IEntity (can attack) only.
-///
-/// LSP demo: Goblin does NOT implement IFlyable — goblins can't fly, and that's fine.
-/// No NotSupportedException, no empty stub. The hierarchy is honest.
 /// </summary>
 public class Goblin : Monster, IEntity
 {
@@ -21,5 +18,11 @@ public class Goblin : Monster, IEntity
     public void Attack()
     {
         Console.WriteLine($"{Name} swings its crude dagger wildly!");
+    }
+
+    /// <summary>Goblin lets out a piercing shriek to call nearby allies.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} lets out a piercing shriek, summoning nearby goblins!");
     }
 }

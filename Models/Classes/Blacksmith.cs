@@ -1,13 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6DependencyInversion.Models.Classes;
 
 /// <summary>
-/// Blacksmith — a skilled craftsperson who can hold their own in a fight.
-/// Corresponds to the "Blacksmith" class in the character data files.
+/// Blacksmith - a skilled craftsperson who can hold their own in a fight.
 /// Implements IEntity (hammer strike) and IDefendable (forge stance).
-/// Future: ICraftable when that interface is built.
 /// </summary>
 public class Blacksmith : Character, IEntity, IDefendable
 {
@@ -21,4 +19,10 @@ public class Blacksmith : Character, IEntity, IDefendable
 
     public void Defend() =>
         Console.WriteLine($"{Name} hunches into a forge stance, using their thick apron to deflect the blow!");
+
+    /// <summary>Blacksmith repairs and reinforces their own armor on the spot.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} quickly repairs and reinforces their armor with expert hands, restoring their defenses!");
+    }
 }

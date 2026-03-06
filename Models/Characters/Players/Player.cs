@@ -1,11 +1,9 @@
-namespace W5SolidLsp.Models.Characters.Players;
+namespace W6DependencyInversion.Models.Characters.Players;
 
 /// <summary>
 /// Represents the user-controlled player character.
-/// Derives from Character — the player shares the same base data as every NPC.
-///
-/// Core design philosophy: anything a Player can do, an NPC can do too.
-/// Capabilities (IFlyable, IShootable, etc.) are added via interfaces, not subclassing.
+/// Derives from Character, which extends CharacterBase.
+/// PerformSpecialAction() can be overridden per player build in the future.
 /// </summary>
 public class Player : Character
 {
@@ -15,4 +13,10 @@ public class Player : Character
     /// <summary>Creates a new Player with the specified values.</summary>
     public Player(string name, string charClass, int level, int hp, string equipment)
         : base(name, charClass, level, hp, equipment) { }
+
+    /// <summary>The player uses their signature move.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} the {Class} channels all their focus into a decisive move!");
+    }
 }

@@ -1,14 +1,11 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Monsters;
+using W6DependencyInversion.Interfaces;
+using W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Monsters;
+namespace W6DependencyInversion.Models.Characters.Npcs.Monsters;
 
 /// <summary>
-/// A troll — a large, hostile creature that regenerates and can swim.
+/// A troll - a large, hostile creature that regenerates and can swim.
 /// Implements IEntity (can attack) and ISwimmable (can swim).
-///
-/// ISP demo: Troll only implements what it genuinely can do.
-/// LSP demo: Troll safely substitutes for IEntity anywhere.
 /// </summary>
 public class Troll : Monster, IEntity, ISwimmable
 {
@@ -27,5 +24,11 @@ public class Troll : Monster, IEntity, ISwimmable
     public void Swim()
     {
         Console.WriteLine($"{Name} surges through the water with powerful strokes!");
+    }
+
+    /// <summary>Troll regenerates hit points through thick, rubbery hide.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} roars and regenerates, wounds knitting closed before your eyes!");
     }
 }
