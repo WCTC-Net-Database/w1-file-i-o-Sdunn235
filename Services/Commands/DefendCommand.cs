@@ -1,6 +1,6 @@
-using W5SolidLsp.Interfaces;
+using W6SolidDip.Interfaces;
 
-namespace W5SolidLsp.Services.Commands;
+namespace W6SolidDip.Services.Commands;
 
 /// <summary>Encapsulates a Defend action for any IDefendable entity (Command Pattern).</summary>
 public class DefendCommand : ICommand

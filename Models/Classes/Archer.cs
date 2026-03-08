@@ -1,19 +1,16 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6SolidDip.Models.Classes;
 
 /// <summary>
 /// An archer — a ranged combat specialist who can attack and shoot.
-/// Implements IEntity (basic attack) and IShootable (ranged shot).
+/// Inherits IEntity from CharacterBase; also implements IShootable.
 ///
-/// Note: Models/Classes/ holds RPG class templates (like D&D classes), not C# classes in the OOP sense.
-/// These will eventually power a character creation system where a Player picks a CharacterClass.
-/// For now, Archer acts as a standalone IEntity for GameEngine demonstration.
-///
-/// ISP demo: Archer implements exactly what it needs — nothing more.
+/// ISP: Archer implements exactly what it needs — nothing more.
+/// DIP: GameEngine depends on IEntity (abstraction), not Archer directly.
 /// </summary>
-public class Archer : Character, IEntity, IShootable
+public class Archer : CharacterBase, IShootable
 {
     public Archer() : base("Archer", "Ranger", 2, 30, "longbow|quiver") { }
 
@@ -21,7 +18,7 @@ public class Archer : Character, IEntity, IShootable
         : base(name, "Ranger", level, hp, equipment) { }
 
     /// <summary>Archer attacks with a swift close-range strike.</summary>
-    public void Attack()
+    public override void Attack()
     {
         Console.WriteLine($"{Name} draws a short blade for a quick melee strike!");
     }
@@ -30,5 +27,11 @@ public class Archer : Character, IEntity, IShootable
     public void Shoot()
     {
         Console.WriteLine($"{Name} draws the bowstring and fires an arrow!");
+    }
+
+    /// <summary>Archer takes careful aim, lining up a guaranteed critical shot.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} takes careful aim and lines up a guaranteed critical shot!");
     }
 }

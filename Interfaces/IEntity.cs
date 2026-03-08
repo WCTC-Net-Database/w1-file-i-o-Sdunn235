@@ -1,4 +1,4 @@
-namespace W5SolidLsp.Interfaces;
+namespace W6SolidDip.Interfaces;
 
 /// <summary>
 /// Base interface for all combat-capable entities in the game.

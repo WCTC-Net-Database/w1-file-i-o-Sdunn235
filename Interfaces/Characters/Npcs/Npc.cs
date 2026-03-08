@@ -1,13 +1,16 @@
-namespace W5SolidLsp.Models.Characters.Npcs;
+using W6SolidDip.Models.Characters;
+
+namespace W6SolidDip.Models.Characters.Npcs;
 
 /// <summary>
 /// Abstract base class for all non-player characters.
-/// Derives from Character — NPCs share the same base data as the player.
+/// Derives from CharacterBase so all NPCs share combat capability (IEntity) and
+/// the requirement to define a unique special action.
 ///
-/// Any NPC subtype can implement any behavior interface (IEntity, IFlyable, etc.)
+/// Any NPC subtype can implement any behavior interface (IFlyable, ISwimmable, etc.)
 /// just as a Player can. The hierarchy defines what they ARE; interfaces define what they DO.
 /// </summary>
-public abstract class Npc : Character
+public abstract class Npc : CharacterBase
 {
     /// <summary>
     /// The NPC's faction alignment (e.g., Hostile, Neutral, Friendly).
@@ -28,3 +31,4 @@ public abstract class Npc : Character
         Faction = faction;
     }
 }
+

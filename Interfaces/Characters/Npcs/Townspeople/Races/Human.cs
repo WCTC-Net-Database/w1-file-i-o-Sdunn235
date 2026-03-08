@@ -1,6 +1,6 @@
-using W5SolidLsp.Models.Characters.Npcs.Townspeople;
+using W6SolidDip.Models.Characters.Npcs.Townspeople;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople.Races;
+namespace W6SolidDip.Models.Characters.Npcs.Townspeople.Races;
 
 /// <summary>
 /// Human — the most adaptable and widespread race in the world.
@@ -15,4 +15,10 @@ public class Human : Townsperson
 
     public Human(string name, string charClass, int level, int hp, string equipment, string faction = "Neutral")
         : base(name, charClass, level, hp, equipment, faction) { }
+
+    /// <summary>Human draws on sheer determination to push past their limits.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} draws on sheer determination and pushes past their limits!");
+    }
 }

@@ -1,7 +1,7 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Townspeople;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters.Npcs.Townspeople;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople.Races;
+namespace W6SolidDip.Models.Characters.Npcs.Townspeople.Races;
 
 /// <summary>
 /// Elf — an ancient, graceful race with a natural affinity for magic and the sky.
@@ -19,4 +19,10 @@ public class Elf : Townsperson, IFlyable
 
     public void Fly() =>
         Console.WriteLine($"{Name} rises gracefully on a current of magical wind!");
+
+    /// <summary>Elf communes with nature, sensing hidden threats nearby.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} communes with the forest, sensing all threats within the grove!");
+    }
 }

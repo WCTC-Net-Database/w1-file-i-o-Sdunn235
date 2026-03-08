@@ -1,12 +1,11 @@
 {
   "profiles": {
-    "w5-solid-lsp": {
+    "w6-solid-dip": {
       "commandName": "Project",
-      "workingDirectory": "$(ProjectDir)"
-    },
-    "WSL": {
-      "commandName": "WSL2",
-      "distributionName": ""
+      "workingDirectory": "$(ProjectDir)",
+      "environmentVariables": {
+        "DOTNET_ROOT": "C:\\Program Files\\dotnet"
+      }
     }
   }
 }

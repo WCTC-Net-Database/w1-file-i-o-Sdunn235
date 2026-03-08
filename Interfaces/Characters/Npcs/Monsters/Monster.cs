@@ -1,6 +1,6 @@
-using W5SolidLsp.Models.Characters.Npcs;
+using W6SolidDip.Models.Characters.Npcs;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Monsters;
+namespace W6SolidDip.Models.Characters.Npcs.Monsters;
 
 /// <summary>
 /// Abstract base class for all hostile monster NPCs.

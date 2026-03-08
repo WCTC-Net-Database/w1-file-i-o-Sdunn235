@@ -1,14 +1,17 @@
-namespace W5SolidLsp.Models.Characters;
+namespace W6SolidDip.Models.Characters;
 
 /// <summary>
-/// Represents the base data for any character in the game — player or NPC.
-/// Kept concrete (non-abstract) so CsvHelper can instantiate it directly for file I/O.
+/// Abstract base class representing any character in the game — player or NPC.
+/// Now properly abstract since we use CharacterDto for file I/O (SRP).
 /// All entities in the game derive from this class.
 ///
 /// Core design philosophy: anything a Player can do, an NPC can do too.
 /// Capabilities are granted by interfaces (IEntity, IFlyable, etc.), not by class position.
+/// 
+/// Design Note: This class is abstract to prevent direct instantiation.
+/// CharacterBase extends this for combat entities, while CharacterDto handles serialization.
 /// </summary>
-public class Character
+public abstract class Character
 {
     /// <summary>The character's name.</summary>
     public string Name { get; set; }

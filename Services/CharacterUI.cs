@@ -1,7 +1,7 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
 
-namespace W5SolidLsp.Services;
+namespace W6SolidDip.Services;
 
 /// <summary>
 /// Responsible for all character-related console interactions.
@@ -102,7 +102,8 @@ public class CharacterUI
         string? equipment = Console.ReadLine();
 
         // Create new character object with input validation
-        Character newCharacter = new()
+        // Using BasicCharacter since Character is now abstract (follows proper OOP)
+        Character newCharacter = new BasicCharacter()
         {
             Name = name ?? string.Empty,
             Class = characterClass ?? string.Empty,

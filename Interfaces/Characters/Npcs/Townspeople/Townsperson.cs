@@ -1,6 +1,6 @@
-using W5SolidLsp.Models.Characters.Npcs;
+using W6SolidDip.Models.Characters.Npcs;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople;
+namespace W6SolidDip.Models.Characters.Npcs.Townspeople;
 
 /// <summary>
 /// Abstract base class for friendly or neutral NPC townspeople.

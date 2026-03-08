@@ -1,10 +1,12 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
+using W6SolidDip.Models.DataTransfer;
+using W6SolidDip.Models.Mapping;
 
-namespace W5SolidLsp.Services;
+namespace W6SolidDip.Services;
 
 /// <summary>
 /// CSV implementation of IFileHandler.
@@ -34,6 +36,7 @@ public class CsvFileHandler : IFileHandler
 
     /// <summary>
     /// Reads all characters from the CSV file.
+    /// Uses CharacterDto for deserialization, then maps to domain objects (SRP).
     /// </summary>
     /// <returns>A list of all characters in the file, or an empty list if file doesn't exist.</returns>
     public List<Character> ReadAll()
@@ -45,8 +48,11 @@ public class CsvFileHandler : IFileHandler
 
         using StreamReader reader = new(_filePath);
         using CsvReader csv = new(reader, _csvConfig);
-        csv.Context.RegisterClassMap<CharacterMap>();
-        return csv.GetRecords<Character>().ToList();
+        csv.Context.RegisterClassMap<CharacterDtoMap>();
+
+        // Read DTOs from file, then map to domain objects
+        var dtos = csv.GetRecords<CharacterDto>().ToList();
+        return CharacterMapper.ToCharacters(dtos);
     }
 
     /// <summary>
@@ -78,6 +84,7 @@ public class CsvFileHandler : IFileHandler
 
     /// <summary>
     /// Writes all characters to the CSV file, replacing any existing content.
+    /// Maps domain objects to DTOs for serialization (SRP).
     /// This is useful when you need to update the entire file (like after leveling up a character).
     /// </summary>
     /// <param name="characters">The list of characters to write.</param>
@@ -85,12 +92,16 @@ public class CsvFileHandler : IFileHandler
     {
         using StreamWriter writer = new(_filePath, false);
         using CsvWriter csv = new(writer, _csvConfig);
-        csv.Context.RegisterClassMap<CharacterMap>();
-        csv.WriteRecords(characters);
+        csv.Context.RegisterClassMap<CharacterDtoMap>();
+
+        // Map domain objects to DTOs, then write
+        var dtos = CharacterMapper.ToDtos(characters);
+        csv.WriteRecords(dtos);
     }
 
     /// <summary>
     /// Appends a single character to the end of the CSV file.
+    /// Maps domain object to DTO for serialization (SRP).
     /// This is more efficient than rewriting the entire file when adding one character.
     /// </summary>
     /// <param name="character">The character to append.</param>
@@ -98,19 +109,21 @@ public class CsvFileHandler : IFileHandler
     {
         // Check if file exists to determine if we need to write headers
         bool fileExists = File.Exists(_filePath);
-        
+
         using StreamWriter writer = new(_filePath, append: true);
         using CsvWriter csv = new(writer, _csvConfig);
-        csv.Context.RegisterClassMap<CharacterMap>();
-        
+        csv.Context.RegisterClassMap<CharacterDtoMap>();
+
         // Only write header if file doesn't exist
         if (!fileExists)
         {
-            csv.WriteHeader<Character>();
+            csv.WriteHeader<CharacterDto>();
             csv.NextRecord();
         }
-        
-        csv.WriteRecord(character);
+
+        // Map domain object to DTO, then write
+        var dto = CharacterMapper.ToDto(character);
+        csv.WriteRecord(dto);
         csv.NextRecord();
     }
 }

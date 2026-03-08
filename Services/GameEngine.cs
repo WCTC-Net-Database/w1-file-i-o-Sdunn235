@@ -1,29 +1,59 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Services.Commands;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Services.Commands;
 
-namespace W5SolidLsp.Services;
+namespace W6SolidDip.Services;
 
 /// <summary>
 /// Runs the game loop and processes entities.
-/// Depends only on IEntity (DIP) — never on concrete classes like Ghost or Goblin.
 ///
-/// Uses the 'is' keyword to safely check for optional capabilities before calling them.
-/// This satisfies LSP: we never assume an IEntity can fly, shoot, swim, or defend.
+/// DIP: GameEngine depends on abstractions (IEntity, IFileHandler), never on
+/// concrete classes like Ghost, Goblin, CsvFileHandler, or JsonFileHandler.
+/// Dependencies are injected through the constructor — the caller decides
+/// which implementations to provide.
 ///
-/// Also demonstrates the Command Pattern (stretch goal) by building a command queue
-/// from the entity list and executing each command in sequence.
+/// Uses the 'is' keyword to safely check for optional capabilities (LSP/ISP).
+/// Also demonstrates the Command Pattern via RunTurnWithCommands.
 /// </summary>
 public class GameEngine
 {
     private readonly List<IEntity> _entities;
+    private readonly IFileHandler _fileHandler;
 
     /// <summary>
-    /// Initializes a new GameEngine with the given list of entities.
+    /// Initializes a new GameEngine with injected dependencies.
+    /// DIP in action: GameEngine never creates its own CsvFileHandler or concrete entity.
     /// </summary>
+    /// <param name="fileHandler">Abstraction for file I/O — injected, not created here.</param>
     /// <param name="entities">The entities to process each turn.</param>
-    public GameEngine(List<IEntity> entities)
+    public GameEngine(IFileHandler fileHandler, List<IEntity> entities)
     {
+        _fileHandler = fileHandler;
         _entities = entities;
+    }
+
+    /// <summary>
+    /// Uses the injected IFileHandler to read and display all characters from the data source.
+    /// DIP demo: GameEngine calls _fileHandler.ReadAll() on an abstraction —
+    /// it has no idea whether the source is CSV, JSON, or anything else.
+    /// </summary>
+    public void DisplayLoadedCharacters()
+    {
+        Console.WriteLine("\n=== Characters Loaded via IFileHandler (DIP) ===\n");
+
+        var characters = _fileHandler.ReadAll();
+
+        if (characters.Count == 0)
+        {
+            Console.WriteLine("No characters found in the data source.");
+            return;
+        }
+
+        foreach (var character in characters)
+        {
+            Console.WriteLine($"  {character}");
+        }
+
+        Console.WriteLine();
     }
 
     /// <summary>
@@ -74,6 +104,13 @@ public class GameEngine
         if (entity is ISwimmable swimmingEntity)
         {
             swimmingEntity.Swim();
+        }
+
+        // W6 DIP: Call PerformSpecialAction if the entity is a CharacterBase (abstraction check).
+        // GameEngine depends on the abstraction, not on any concrete type.
+        if (entity is W6SolidDip.Models.Characters.CharacterBase character)
+        {
+            character.PerformSpecialAction();
         }
     }
 

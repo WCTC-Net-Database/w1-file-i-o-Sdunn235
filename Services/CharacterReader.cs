@@ -1,9 +1,11 @@
 using System.Globalization;
 using CsvHelper;
 using CsvHelper.Configuration;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Models.Characters;
+using W6SolidDip.Models.DataTransfer;
+using W6SolidDip.Models.Mapping;
 
-namespace W5SolidLsp.Services;
+namespace W6SolidDip.Services;
 
 /// <summary>
 /// Responsible for reading Character data from CSV files.
@@ -30,6 +32,7 @@ public class CharacterReader
 
     /// <summary>
     /// Reads all characters from the CSV file.
+    /// Uses CharacterDto for deserialization, then maps to domain objects (SRP).
     /// </summary>
     /// <returns>A list of all characters in the file, or an empty list if file doesn't exist.</returns>
     public List<Character> ReadAll()
@@ -41,8 +44,11 @@ public class CharacterReader
 
         using StreamReader reader = new(_filePath);
         using CsvReader csv = new(reader, _csvConfig);
-        csv.Context.RegisterClassMap<CharacterMap>();
-        return csv.GetRecords<Character>().ToList();
+        csv.Context.RegisterClassMap<CharacterDtoMap>();
+
+        // Read DTOs from file, then map to domain objects
+        var dtos = csv.GetRecords<CharacterDto>().ToList();
+        return CharacterMapper.ToCharacters(dtos);
     }
 
     /// <summary>

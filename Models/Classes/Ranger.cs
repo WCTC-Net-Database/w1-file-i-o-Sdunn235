@@ -1,22 +1,20 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6SolidDip.Models.Classes;
 
 /// <summary>
 /// Ranger — a wilderness scout comfortable in any terrain.
-/// Corresponds to the "Ranger" class in the character data files.
-/// Implements IEntity (melee strike), IShootable (ranged shot), and ISwimmable
-/// (rangers operate in swamps, rivers, and coastlines).
+/// Inherits IEntity from CharacterBase; also implements IShootable and ISwimmable.
 /// </summary>
-public class Ranger : Character, IEntity, IShootable, ISwimmable
+public class Ranger : CharacterBase, IShootable, ISwimmable
 {
     public Ranger() : base("Ranger", "Ranger", 1, 22, "bow|quiver|cloak") { }
 
     public Ranger(string name, int level, int hp, string equipment)
         : base(name, "Ranger", level, hp, equipment) { }
 
-    public void Attack() =>
+    public override void Attack() =>
         Console.WriteLine($"{Name} draws a hunting blade for a swift close-quarters strike!");
 
     public void Shoot() =>
@@ -24,4 +22,10 @@ public class Ranger : Character, IEntity, IShootable, ISwimmable
 
     public void Swim() =>
         Console.WriteLine($"{Name} slips into the water and moves through it with practiced ease!");
+
+    /// <summary>Ranger marks a target, ensuring every following strike lands true.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} marks the target — every arrow will find its mark until the hunt ends!");
+    }
 }

@@ -1,7 +1,7 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Townspeople;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters.Npcs.Townspeople;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople.Races;
+namespace W6SolidDip.Models.Characters.Npcs.Townspeople.Races;
 
 /// <summary>
 /// Dwarf — a stout, resilient race built for underground labor and combat.
@@ -19,4 +19,10 @@ public class Dwarf : Townsperson, IDefendable
 
     public void Defend() =>
         Console.WriteLine($"{Name} digs in with powerful legs and shrugs off the blow!");
+
+    /// <summary>Dwarf calls upon ancient resilience to endure devastating hits.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} invokes dwarven resilience, shrugging off the pain!");
+    }
 }

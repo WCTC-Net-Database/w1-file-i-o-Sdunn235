@@ -1,8 +1,10 @@
 using System.Text.Json;
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
+using W6SolidDip.Models.DataTransfer;
+using W6SolidDip.Models.Mapping;
 
-namespace W5SolidLsp.Services;
+namespace W6SolidDip.Services;
 
 /// <summary>
 /// JSON implementation of IFileHandler.
@@ -31,6 +33,7 @@ public class JsonFileHandler : IFileHandler
 
     /// <summary>
     /// Reads all characters from the JSON file.
+    /// Uses CharacterDto for deserialization, then maps to domain objects (SRP).
     /// </summary>
     /// <returns>A list of all characters in the file, or an empty list if file doesn't exist.</returns>
     public List<Character> ReadAll()
@@ -51,15 +54,16 @@ public class JsonFileHandler : IFileHandler
                 return new List<Character>();
             }
 
-            var characters = JsonSerializer.Deserialize<List<Character>>(json, _options);
+            var dtos = JsonSerializer.Deserialize<List<CharacterDto>>(json, _options);
 
-            if (characters == null)
+            if (dtos == null)
             {
                 Console.WriteLine("Warning: JSON deserialization returned null");
                 return new List<Character>();
             }
 
-            return characters;
+            // Map DTOs to domain objects
+            return CharacterMapper.ToCharacters(dtos);
         }
         catch (JsonException ex)
         {
@@ -99,11 +103,14 @@ public class JsonFileHandler : IFileHandler
 
     /// <summary>
     /// Writes all characters to the JSON file, replacing any existing content.
+    /// Maps domain objects to DTOs for serialization (SRP).
     /// </summary>
     /// <param name="characters">The list of characters to write.</param>
     public void WriteAll(List<Character> characters)
     {
-        string json = JsonSerializer.Serialize(characters, _options);
+        // Map domain objects to DTOs, then serialize
+        var dtos = CharacterMapper.ToDtos(characters);
+        string json = JsonSerializer.Serialize(dtos, _options);
         File.WriteAllText(_filePath, json);
     }
 

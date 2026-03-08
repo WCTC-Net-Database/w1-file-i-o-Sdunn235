@@ -1,4 +1,4 @@
-namespace W5SolidLsp.Interfaces;
+namespace W6SolidDip.Interfaces;
 
 /// <summary>
 /// Interface for the Command Pattern (Stretch Goal).

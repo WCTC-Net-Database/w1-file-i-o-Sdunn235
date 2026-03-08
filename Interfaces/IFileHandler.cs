@@ -1,6 +1,6 @@
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Models.Characters;
 
-namespace W5SolidLsp.Interfaces;
+namespace W6SolidDip.Interfaces;
 
 /// <summary>
 /// Interface that defines the contract for file handling operations.

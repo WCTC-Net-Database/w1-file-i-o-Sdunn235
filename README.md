@@ -1,208 +1,162 @@
-﻿# Week 5: Liskov Substitution (LSP) & Interface Segregation (ISP)
+﻿# Week 6: Dependency Inversion (DIP) & Abstract Classes
 
-> **Template Purpose:** This template represents a working solution through Week 4. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
+> **Template Purpose:** This template represents a working solution through Week 5. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
 
 ---
 
 ## Overview
 
-This week covers two more SOLID principles: **Liskov Substitution Principle (LSP)** and **Interface Segregation Principle (ISP)**. You'll fix a design problem where a "fat" interface forces classes to implement methods they can't use, then create smaller, focused interfaces for specific behaviors. This week also introduces a simple **GameEngine** - a class that runs your game loop.
+This week completes your SOLID journey with the **Dependency Inversion Principle (DIP)**: high-level modules should depend on abstractions, not concrete implementations. You'll also learn about **abstract classes** - a way to share common code between related classes while enforcing that derived classes implement certain methods.
 
 ## Learning Objectives
 
 By completing this assignment, you will:
-- [ ] Understand why LSP matters (substitutability)
-- [ ] Apply ISP by creating focused interfaces
-- [ ] Check if an object implements an interface using `is` keyword
-- [ ] Create a simple game engine class
+- [ ] Understand and apply the Dependency Inversion Principle
+- [ ] Create abstract classes with shared properties and methods
+- [ ] Use abstract methods that derived classes must implement
+- [ ] See how DIP makes code more testable and flexible
 
 ## Prerequisites
 
 Before starting, ensure you have:
-- [ ] Completed Week 4 assignment (or are using this template)
-- [ ] Working IFileHandler with CSV and JSON support
-- [ ] Understanding of interfaces
+- [ ] Completed Week 5 assignment (or are using this template)
+- [ ] Working GameEngine with multiple entity types
+- [ ] Understanding of interfaces and the `is` keyword
 
 ## What's New This Week
 
 | Concept | Description |
 |---------|-------------|
-| LSP | Subtypes must be substitutable for their base types |
-| ISP | Many small interfaces are better than one big interface |
-| `is` keyword | Check if object implements an interface |
-| `GameEngine` | Class that runs the main game loop |
-| Behavior interfaces | `IFlyable`, `IShootable`, etc. |
-
----
-
-## What's in This Template
-
-This template introduces several new classes. **Don't panic** - review them to understand the structure:
-
-```
-ConsoleRPG/
-├── Program.cs              # Entry point
-├── Services/
-│   └── GameEngine.cs       # NEW: Runs the game loop
-├── Models/
-│   ├── Character.cs        # Player character
-│   ├── Ghost.cs            # Can fly (implements IFlyable)
-│   └── Goblin.cs           # Cannot fly
-└── Interfaces/
-    ├── IEntity.cs          # Base interface for all entities
-    └── IFlyable.cs         # NEW: Interface for flying entities
-```
+| DIP | Depend on abstractions, not concretions |
+| `abstract class` | A class that can't be instantiated directly |
+| `abstract method` | A method that derived classes MUST implement |
+| `CharacterBase` | Abstract base class for all characters |
+| `override` | Keyword to implement abstract methods |
 
 ---
 
 ## Assignment Tasks
 
-### Task 1: Understand the LSP Problem
+### Task 1: Understand DIP
 
 **The Problem:**
-The current `IEntity` interface has a `Fly()` method, but not all entities can fly. Goblins can't fly, so they throw an exception or do nothing - violating LSP.
+GameEngine directly creates and uses concrete classes, making it hard to test or swap implementations.
 
-**Example of LSP Violation:**
+**Before (violates DIP):**
 ```csharp
-public interface IEntity
+public class GameEngine
 {
-    void Attack();
-    void Fly();  // Problem: Not all entities can fly!
-}
-
-public class Goblin : IEntity
-{
-    public void Attack() { /* works */ }
-    public void Fly() { throw new NotSupportedException(); } // LSP violation!
+    private CsvFileHandler _fileHandler = new CsvFileHandler("input.csv"); // Concrete!
+    private Goblin _enemy = new Goblin(); // Concrete!
 }
 ```
 
-### Task 2: Fix the LSP Violation
-
-**What to do:**
-- Remove `Fly()` from `IEntity`
-- Create a new `IFlyable` interface
-- Have only flying entities implement `IFlyable`
-
-**Example:**
+**After (follows DIP):**
 ```csharp
-public interface IEntity
+public class GameEngine
 {
-    void Attack();
-    // No Fly() here!
-}
+    private IFileHandler _fileHandler; // Abstraction!
+    private ICharacter _enemy; // Abstraction!
 
-public interface IFlyable
-{
-    void Fly();
-}
-
-public class Ghost : IEntity, IFlyable
-{
-    public void Attack() { /* ghost attack */ }
-    public void Fly() { Console.WriteLine("Ghost floats through the air!"); }
-}
-
-public class Goblin : IEntity
-{
-    public void Attack() { /* goblin attack */ }
-    // No Fly() - goblins can't fly, and that's okay!
-}
-```
-
-### Task 3: Update GameEngine to Check for Interfaces
-
-**What to do:**
-- Use the `is` keyword to check if an entity can fly before calling Fly()
-
-**Example:**
-```csharp
-public void ProcessEntity(IEntity entity)
-{
-    entity.Attack(); // All entities can attack
-
-    // Only call Fly() if the entity can fly
-    if (entity is IFlyable flyingEntity)
+    public GameEngine(IFileHandler fileHandler, ICharacter enemy)
     {
-        flyingEntity.Fly();
+        _fileHandler = fileHandler; // Injected!
+        _enemy = enemy; // Injected!
     }
 }
 ```
 
-### Task 4: Create Two New Classes with Behaviors
+### Task 2: Create CharacterBase Abstract Class
 
 **What to do:**
-- Create at least two new entity classes
-- Design focused interfaces for their unique abilities
-- Integrate them into the GameEngine
+- Create `CharacterBase.cs` with common properties
+- Add abstract methods for behaviors that differ by character type
 
-**Examples:**
+**Example:**
 ```csharp
-public interface IShootable
+public abstract class CharacterBase : ICharacter
 {
-    void Shoot();
-}
+    public string Name { get; set; }
+    public int HitPoints { get; set; }
+    public int Level { get; set; }
 
-public class Archer : IEntity, IShootable
-{
-    public void Attack() { /* basic attack */ }
-    public void Shoot() { Console.WriteLine("Archer fires an arrow!"); }
+    protected CharacterBase(string name, int hitPoints, int level)
+    {
+        Name = name;
+        HitPoints = hitPoints;
+        Level = level;
+    }
+
+    public virtual void Attack(ICharacter target)
+    {
+        Console.WriteLine($"{Name} attacks {target.Name}!");
+    }
+
+    // Derived classes MUST implement this
+    public abstract void PerformSpecialAction();
 }
 ```
+
+### Task 3: Create Derived Classes
+
+**What to do:**
+- Have your character classes inherit from `CharacterBase`
+- Implement the abstract `PerformSpecialAction` method
+
+**Example:**
+```csharp
+public class Warrior : CharacterBase
+{
+    public Warrior(string name, int hitPoints, int level)
+        : base(name, hitPoints, level) { }
+
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} performs a powerful sword strike!");
+    }
+}
+
+public class Mage : CharacterBase
+{
+    public Mage(string name, int hitPoints, int level)
+        : base(name, hitPoints, level) { }
+
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} casts a fireball!");
+    }
+}
+```
+
+### Task 4: Update GameEngine for DIP
+
+**What to do:**
+- GameEngine should receive dependencies through its constructor
+- Work with abstractions (interfaces/abstract classes), not concrete types
 
 ---
 
 ## Stretch Goal (+10%)
 
-**Implement the Command Pattern**
+**Add Additional Character Types**
 
-Create commands that encapsulate actions:
-
-```csharp
-public interface ICommand
-{
-    void Execute();
-}
-
-public class AttackCommand : ICommand
-{
-    private IEntity _entity;
-    public AttackCommand(IEntity entity) { _entity = entity; }
-    public void Execute() { _entity.Attack(); }
-}
-
-// Usage in GameEngine:
-var commands = new List<ICommand>();
-commands.Add(new AttackCommand(goblin));
-commands.Add(new FlyCommand(ghost));
-foreach (var cmd in commands) cmd.Execute();
-```
+Create 2+ additional character classes with unique special actions:
+- `Healer` with a healing ability
+- `Rogue` with a stealth ability
+- Your own creative class
 
 ---
 
-## Why This Matters
+## Abstract vs Interface
 
-**LSP in Practice:**
-```csharp
-// This should work with ANY IEntity
-void ProcessEntities(List<IEntity> entities)
-{
-    foreach (var entity in entities)
-    {
-        entity.Attack(); // Safe - all entities can attack
-        // entity.Fly();  // NOT safe - not all entities can fly!
-    }
-}
-```
+| Feature | Interface | Abstract Class |
+|---------|-----------|----------------|
+| Can have code? | No (just signatures) | Yes (shared implementation) |
+| Multiple inheritance? | Yes | No |
+| When to use | Define a contract | Share code between related classes |
 
-**ISP in Practice:**
-```csharp
-// Small, focused interfaces = flexibility
-public class Dragon : IEntity, IFlyable, IBreathable
-{
-    // Implements exactly what it needs
-}
-```
+**Use interfaces when:** different class families need same behavior
+**Use abstract classes when:** related classes share common code
 
 ---
 
@@ -210,32 +164,74 @@ public class Dragon : IEntity, IFlyable, IBreathable
 
 | Criteria | Points | Description |
 |----------|--------|-------------|
-| LSP Fix | 30 | Removed Fly() from IEntity, created IFlyable |
-| GameEngine Update | 20 | Correctly checks for IFlyable before calling Fly() |
-| New Classes | 20 | Created 2+ classes with focused interfaces |
-| ISP Compliance | 10 | Interfaces are small and focused |
+| DIP Implementation | 30 | GameEngine depends on abstractions, not concretions |
+| CharacterBase Class | 25 | Proper abstract class with shared properties/methods |
+| Derived Classes | 25 | Character classes inherit and implement abstract methods |
 | Integration | 10 | Everything works together in GameEngine |
 | Code Quality | 10 | Clean, readable, well-commented |
 | **Total** | **100** | |
-| **Stretch: Command Pattern** | **+10** | Implemented command pattern for actions |
+| **Stretch: Additional Classes** | **+10** | 2+ additional character types with unique behaviors |
 
 ---
 
 ## How This Connects to the Final Project
 
-- LSP ensures your entity hierarchy works correctly
-- ISP creates the ability/behavior interfaces used throughout
-- The GameEngine pattern continues through the final project
-- These patterns make your code extensible without modification
+- `CharacterBase` evolves into your `Player` and `Monster` base classes
+- DIP prepares you for dependency injection in EF Core (Week 9+)
+- Abstract classes are used throughout the final project
+- This completes the SOLID foundation for the semester
+
+---
+
+## Looking Ahead: From IFileHandler to IContext
+
+In Week 4, `IFileHandler` worked great for one entity type (Characters). But what happens when your game needs **multiple entity types**?
+
+**The Problem:**
+```csharp
+// Week 4 approach - separate handlers for each type?
+IFileHandler characterHandler = new JsonFileHandler("characters.json");
+IFileHandler monsterHandler = new JsonFileHandler("monsters.json");
+IFileHandler itemHandler = new JsonFileHandler("items.json");
+// This gets messy fast!
+```
+
+**The Solution (Week 7):**
+```csharp
+// IContext manages ALL entity types in one place
+public interface IContext
+{
+    List<Player> Players { get; set; }
+    List<MonsterBase> Monsters { get; set; }
+    List<Item> Items { get; set; }
+
+    void Read();
+    void Write(Player player);
+    void Write(MonsterBase monster);
+    int SaveChanges();  // Save everything at once!
+}
+```
+
+**Why this matters for the midterm:**
+- The midterm codebase uses `IContext` and `GameContext`
+- `GameContext` is like a "fake DbContext" using JSON files
+- Understanding this pattern is critical for the exam
+- In Week 9, `IContext` becomes the real `DbContext` with EF Core
+
+**The evolution:**
+```
+IFileHandler (Week 4)     →     IContext (Week 7)     →     DbContext (Week 9)
+Single entity type              Multiple entity types        Real database
+```
 
 ---
 
 ## Tips
 
-- Start by understanding the existing code before modifying
-- Draw a diagram of your interfaces and classes
-- Test with a simple scenario: process a list with Ghost and Goblin
-- The `is` keyword is your friend for checking interface implementation
+- Abstract classes can have both implemented and abstract members
+- Use `protected` for members only derived classes should access
+- Call base constructor with `: base(...)` syntax
+- The `override` keyword is required when implementing abstract methods
 
 ---
 
@@ -249,10 +245,9 @@ public class Dragon : IEntity, IFlyable, IBreathable
 
 ## Resources
 
-- [Liskov Substitution Principle](https://stackify.com/solid-design-liskov-substitution-principle/)
-- [Interface Segregation Principle](https://www.baeldung.com/cs/interface-segregation-principle)
-- [C# `is` Keyword](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/is)
-- [Command Pattern](https://refactoring.guru/design-patterns/command/csharp/example)
+- [Dependency Inversion Principle](https://stackify.com/solid-design-dependency-inversion-principle/)
+- [Abstract Classes in C#](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/abstract-and-sealed-classes-and-class-members)
+- [SOLID Principles Overview](https://www.freecodecamp.org/news/solid-principles-every-developer-should-know/)
 
 ---
 
@@ -260,4 +255,4 @@ public class Dragon : IEntity, IFlyable, IBreathable
 
 - Post questions in the Canvas discussion board
 - Attend office hours
-- Review the in-class repository for additional examplesonal examples
+- Review the in-class repository for additional examples

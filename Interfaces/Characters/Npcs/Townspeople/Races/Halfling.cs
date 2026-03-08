@@ -1,7 +1,7 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Townspeople;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters.Npcs.Townspeople;
 
-namespace W5SolidLsp.Models.Characters.Npcs.Townspeople.Races;
+namespace W6SolidDip.Models.Characters.Npcs.Townspeople.Races;
 
 /// <summary>
 /// Halfling — a small, nimble race at home in rivers and rural settlements.
@@ -18,4 +18,10 @@ public class Halfling : Townsperson, ISwimmable
 
     public void Swim() =>
         Console.WriteLine($"{Name} slips into the water and paddles with surprising speed!");
+
+    /// <summary>Halfling vanishes from sight, using their small stature to hide instantly.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} vanishes from sight, hiding behind the nearest blade of grass!");
+    }
 }

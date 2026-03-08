@@ -1,24 +1,29 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6SolidDip.Models.Classes;
 
 /// <summary>
 /// Cleric — a holy warrior who strikes with divine power and shields allies.
-/// Corresponds to the "Cleric" class in the character data files.
-/// Implements IEntity (divine smite) and IDefendable (holy ward).
+/// Inherits IEntity from CharacterBase; also implements IDefendable.
 /// Future: IHealable when that interface is built.
 /// </summary>
-public class Cleric : Character, IEntity, IDefendable
+public class Cleric : CharacterBase, IDefendable
 {
     public Cleric() : base("Cleric", "Cleric", 1, 22, "mace|armor|potion") { }
 
     public Cleric(string name, int level, int hp, string equipment)
         : base(name, "Cleric", level, hp, equipment) { }
 
-    public void Attack() =>
+    public override void Attack() =>
         Console.WriteLine($"{Name} calls down divine wrath in a smiting blow!");
 
     public void Defend() =>
         Console.WriteLine($"{Name} raises a shimmering holy ward against the attack!");
+
+    /// <summary>Cleric channels divine energy to heal their wounds.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} channels divine light, mending wounds and restoring vitality!");
+    }
 }

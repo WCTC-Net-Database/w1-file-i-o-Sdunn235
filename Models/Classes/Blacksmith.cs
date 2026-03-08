@@ -1,24 +1,29 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters;
 
-namespace W5SolidLsp.Models.Classes;
+namespace W6SolidDip.Models.Classes;
 
 /// <summary>
 /// Blacksmith — a skilled craftsperson who can hold their own in a fight.
-/// Corresponds to the "Blacksmith" class in the character data files.
-/// Implements IEntity (hammer strike) and IDefendable (forge stance).
+/// Inherits IEntity from CharacterBase; also implements IDefendable.
 /// Future: ICraftable when that interface is built.
 /// </summary>
-public class Blacksmith : Character, IEntity, IDefendable
+public class Blacksmith : CharacterBase, IDefendable
 {
     public Blacksmith() : base("Blacksmith", "Blacksmith", 1, 20, "hammer|apron|tongs") { }
 
     public Blacksmith(string name, int level, int hp, string equipment)
         : base(name, "Blacksmith", level, hp, equipment) { }
 
-    public void Attack() =>
+    public override void Attack() =>
         Console.WriteLine($"{Name} swings their heavy forge hammer with practiced force!");
 
     public void Defend() =>
         Console.WriteLine($"{Name} hunches into a forge stance, using their thick apron to deflect the blow!");
+
+    /// <summary>Blacksmith tempers their own weapon mid-battle, sharpening it for bonus damage.</summary>
+    public override void PerformSpecialAction()
+    {
+        Console.WriteLine($"{Name} rapidly re-tempers their hammer, sharpening it for a devastating follow-up!");
+    }
 }

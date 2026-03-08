@@ -1,4 +1,4 @@
-namespace W5SolidLsp.Services;
+namespace W6SolidDip.Services;
 
 /// <summary>
 /// Responsible for displaying menus and getting user choices.

@@ -1,20 +1,20 @@
-using W5SolidLsp.Interfaces;
-using W5SolidLsp.Models.Characters.Npcs.Monsters;
-using W5SolidLsp.Models.Classes;
-using W5SolidLsp.Services;
+using W6SolidDip.Interfaces;
+using W6SolidDip.Models.Characters.Npcs.Monsters;
+using W6SolidDip.Models.Classes;
+using W6SolidDip.Services;
 
 /// <summary>
-/// Week 5: LSP & ISP - Console RPG Character Manager
+/// Week 6: DIP & Abstract Classes - Console RPG Character Manager
 ///
-/// This program demonstrates the Liskov Substitution Principle (LSP) and
-/// Interface Segregation Principle (ISP), building on Week 4's OCP work:
-/// - IEntity: Clean base interface (no Fly - that violated LSP!)
-/// - IFlyable, IShootable, ISwimmable: Focused behavior interfaces (ISP)
-/// - GameEngine: Processes entities using the 'is' keyword to check capabilities
-/// - IFileHandler: Interface for all file operations (carried over from W4)
+/// This program demonstrates the Dependency Inversion Principle (DIP) and
+/// Abstract Classes, building on Week 5's LSP/ISP work:
+/// - CharacterBase: Abstract class with shared code and abstract PerformSpecialAction
+/// - GameEngine: Depends on IFileHandler and IEntity (abstractions), not concretions
+/// - Dependencies injected into GameEngine via constructor (DIP)
+/// - All character classes override PerformSpecialAction with unique behavior
 ///
-/// The key LSP fix: Fly() is no longer on IEntity. Only entities that CAN fly
-/// implement IFlyable. GameEngine checks before calling - no NotSupportedException!
+/// DIP key point: GameEngine never says "new CsvFileHandler" or "new Ghost".
+/// Concrete types are created here in Program (the composition root) and injected.
 /// </summary>
 ///
 /// <remarks>
@@ -92,26 +92,34 @@ class Program
     /// <summary>
     /// Demonstrates the W5 GameEngine with LSP + ISP in action.
     /// Creates a mixed list of entities and processes each one.
-    /// The GameEngine only knows about IEntity — it uses 'is' to discover
-    /// optional capabilities at runtime without breaking LSP.
+    /// The GameEngine only knows about IEntity and IFileHandler (abstractions).
+    /// DIP: dependencies are injected — GameEngine never creates concrete types itself.
     /// </summary>
     private static void RunGameEngineDemo()
     {
-        Console.WriteLine("=== W5: GameEngine Demo (LSP + ISP) ===\n");
+        Console.WriteLine("=== W6: GameEngine Demo (DIP + Abstract Classes) ===\n");
 
-        // Build a list of mixed entities — GameEngine only sees IEntity
+        // DIP: inject the IFileHandler abstraction — GameEngine doesn't know if it's CSV or JSON
+        // Build a list of mixed entities — GameEngine only sees IEntity (abstraction)
         var entities = new List<IEntity>
         {
             new Ghost("Shade", 3, 20),
             new Goblin("Gruk", 1, 15, "crude dagger"),
             new Troll("Morg", 4, 60, "club"),
-            new Archer("Robin", 2, 30, "longbow|quiver")
+            new Archer("Robin", 2, 30, "longbow|quiver"),
+            new Healer("Mira", 2, 18, "staff|bandages"),
+            new Paladin("Aldric", 3, 32, "sword|shield|holy symbol")
         };
 
-        var engine = new GameEngine(entities);
+        // DIP: inject IFileHandler — GameEngine depends on the abstraction, not CsvFileHandler
+        var engine = new GameEngine(_fileHandler, entities);
 
-        // Run using direct 'is' checks (Tasks 2 & 3)
-        Console.WriteLine("--- Direct processing (is keyword) ---");
+        // W6: Show characters loaded via the injected IFileHandler (DIP demo)
+        Console.WriteLine("--- Characters loaded via IFileHandler (DIP) ---");
+        engine.DisplayLoadedCharacters();
+
+        // Run using direct 'is' checks + PerformSpecialAction (abstract class demo)
+        Console.WriteLine("--- Direct processing (is keyword + PerformSpecialAction) ---");
         engine.RunTurn();
 
         // Run using Command Pattern (Stretch Goal)
