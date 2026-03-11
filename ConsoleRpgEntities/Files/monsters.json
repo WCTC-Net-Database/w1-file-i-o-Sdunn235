@@ -1,0 +1,27 @@
+[
+  {
+    "$type": "goblin",
+    "Id": 1,
+    "Name": "Gruk",
+    "Level": 1,
+    "Hp": 15,
+    "AttackPower": 5
+  },
+  {
+    "$type": "goblin",
+    "Id": 2,
+    "Name": "Skrix",
+    "Level": 2,
+    "Hp": 20,
+    "AttackPower": 7
+  },
+  {
+    "$type": "dragon",
+    "Id": 3,
+    "Name": "Ignarix",
+    "Level": 10,
+    "Hp": 200,
+    "AttackPower": 30,
+    "FireDamage": 50
+  }
+]

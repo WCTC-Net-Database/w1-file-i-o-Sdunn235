@@ -1,258 +1,209 @@
-﻿# Week 6: Dependency Inversion (DIP) & Abstract Classes
+﻿# Week 7: Midterm Preparation
 
-> **Template Purpose:** This template represents a working solution through Week 5. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
+> **Template Purpose:** This template provides the codebase you'll work with during the midterm exam. Review it thoroughly before the exam.
 
 ---
 
 ## Overview
 
-This week completes your SOLID journey with the **Dependency Inversion Principle (DIP)**: high-level modules should depend on abstractions, not concrete implementations. You'll also learn about **abstract classes** - a way to share common code between related classes while enforcing that derived classes implement certain methods.
+**There is no assignment this week.** Instead, focus on reviewing this code and preparing for the in-class midterm exam. The exam will test your ability to modify and extend an existing codebase using the concepts from Weeks 1-6.
 
-## Learning Objectives
+## What to Study
 
-By completing this assignment, you will:
-- [ ] Understand and apply the Dependency Inversion Principle
-- [ ] Create abstract classes with shared properties and methods
-- [ ] Use abstract methods that derived classes must implement
-- [ ] See how DIP makes code more testable and flexible
+The midterm will assess your understanding of:
 
-## Prerequisites
+| Concept | Where You Learned It |
+|---------|---------------------|
+| File I/O (JSON) | Weeks 1-4 |
+| LINQ queries | Weeks 3, 7 |
+| Interfaces | Weeks 4-5 |
+| Abstract classes | Week 6 |
+| SOLID principles | Weeks 3-6 |
+| Inheritance | Weeks 5-6 |
 
-Before starting, ensure you have:
-- [ ] Completed Week 5 assignment (or are using this template)
-- [ ] Working GameEngine with multiple entity types
-- [ ] Understanding of interfaces and the `is` keyword
+### The IContext Pattern (Key Concept!)
 
-## What's New This Week
+Remember `IFileHandler` from Week 4? This template introduces `IContext` - the next evolution:
 
-| Concept | Description |
-|---------|-------------|
-| DIP | Depend on abstractions, not concretions |
-| `abstract class` | A class that can't be instantiated directly |
-| `abstract method` | A method that derived classes MUST implement |
-| `CharacterBase` | Abstract base class for all characters |
-| `override` | Keyword to implement abstract methods |
+```
+Week 4: IFileHandler              Week 7: IContext
+├── ReadAll()                     ├── Players (List)
+├── WriteAll()                    ├── Monsters (List)
+├── FindByName()         →        ├── Items (List)
+├── FindByProfession()            ├── Read()
+└── AppendCharacter()             ├── Write(entity)
+                                  └── SaveChanges()
+```
+
+**Why the change?**
+- `IFileHandler` works with one entity type (Characters)
+- `IContext` works with multiple entity types (Players, Monsters, Items)
+- `SaveChanges()` mimics how databases work - you make changes in memory, then save them all at once
+
+**Coming in Week 9:** `IContext` becomes `DbContext` with real database support!
 
 ---
 
-## Assignment Tasks
+## What's in This Template
 
-### Task 1: Understand DIP
+This template is a culmination of everything so far. Notice it uses a **two-project architecture**:
 
-**The Problem:**
-GameEngine directly creates and uses concrete classes, making it hard to test or swap implementations.
+```
+ConsoleRpgFinal.sln                    # Solution file
+│
+├── ConsoleRpg/                        # UI & Game Logic Project
+│   ├── ConsoleRpg.csproj
+│   ├── Program.cs                     # Entry point with DI setup
+│   ├── Startup.cs                     # Dependency injection configuration
+│   ├── GameEngine.cs                  # Main game loop
+│   ├── appsettings.json               # Configuration settings
+│   │
+│   ├── Services/                      # Business logic
+│   │   ├── BattleService.cs           # Combat calculations
+│   │   ├── IBattleService.cs
+│   │   ├── PlayerService.cs           # Player operations
+│   │   └── IPlayerService.cs
+│   │
+│   ├── UI/                            # User interface
+│   │   ├── ConsoleGameUi.cs
+│   │   └── IGameUi.cs
+│   │
+│   ├── Decorators/                    # Decorator pattern example
+│   │   └── AutoSavePlayerServiceDecorator.cs
+│   │
+│   └── Helpers/
+│       └── ConfigurationHelper.cs
+│
+└── ConsoleRpgEntities/                # Data & Models Project
+    ├── ConsoleRpgEntities.csproj
+    │
+    ├── Data/                          # Data access layer
+    │   ├── GameContext.cs             # Primary data context
+    │   ├── IContext.cs                # Context interface (DIP)
+    │   ├── IEntityDao.cs              # Generic DAO interface
+    │   ├── PlayerDao.cs               # Player data operations
+    │   └── MonsterDao.cs              # Monster data operations
+    │
+    ├── Models/                        # Entity classes
+    │   ├── Player.cs                  # Player entity
+    │   ├── MonsterBase.cs             # Abstract monster base
+    │   ├── Goblin.cs                  # Goblin implementation
+    │   ├── Dragon.cs                  # Dragon implementation
+    │   ├── Item.cs                    # Equipment/items
+    │   ├── AbilityScores.cs           # Character stats
+    │   └── Attribute.cs               # Attribute enum
+    │
+    ├── Interfaces/
+    │   └── IMonster.cs
+    │
+    └── Files/                         # JSON data files
+        ├── players.json
+        ├── monsters.json
+        └── items.json
+```
 
-**Before (violates DIP):**
+### Why Two Projects?
+
+This separation follows the **Separation of Concerns** principle:
+
+- **ConsoleRpg**: Handles user interaction, game flow, and business logic
+- **ConsoleRpgEntities**: Contains data models and data access (could be reused by other UIs)
+
+The ConsoleRpg project references ConsoleRpgEntities, not the other way around.
+
+---
+
+## What the Exam Might Ask You to Do
+
+During the exam, you may be asked to:
+
+### 1. Add a New Monster Type
+- Create a new class inheriting from `MonsterBase`
+- Add it to `monsters.json`
+- Load it in `DataContext`
+
+### 2. Add a New Room
+- Create a room in the data
+- Connect it to existing rooms
+- Make sure players can navigate to it
+
+### 3. Enhance Combat
+- Modify `BattleService.cs` to add new attack types
+- Use equipped items to modify damage
+- Add special abilities
+
+### 4. Update the Menu
+- Add new menu options
+- Integrate with existing game logic
+
+---
+
+## Practice Exercise
+
+Try these modifications to prepare:
+
+**Add a Dragon Monster:**
+1. Create `Dragon.cs` inheriting from `MonsterBase`
+2. Give it a `BreathFire()` special ability
+3. Add a dragon to `monsters.json`
+4. Load it in the DataContext
+
+**Add Item-Based Combat:**
+1. Look at `BattleService.cs`
+2. Calculate attack bonus from equipped items
+3. Calculate defense bonus from equipped armor
+4. Use LINQ to sum up item bonuses
+
+---
+
+## LINQ Examples for Combat
+
 ```csharp
-public class GameEngine
-{
-    private CsvFileHandler _fileHandler = new CsvFileHandler("input.csv"); // Concrete!
-    private Goblin _enemy = new Goblin(); // Concrete!
-}
-```
+// Sum attack bonuses from equipped weapons
+int attackBonus = player.Items
+    .Where(item => item.IsEquipped && item.Type == "Weapon")
+    .Sum(item => item.AttackBonus);
 
-**After (follows DIP):**
-```csharp
-public class GameEngine
-{
-    private IFileHandler _fileHandler; // Abstraction!
-    private ICharacter _enemy; // Abstraction!
-
-    public GameEngine(IFileHandler fileHandler, ICharacter enemy)
-    {
-        _fileHandler = fileHandler; // Injected!
-        _enemy = enemy; // Injected!
-    }
-}
-```
-
-### Task 2: Create CharacterBase Abstract Class
-
-**What to do:**
-- Create `CharacterBase.cs` with common properties
-- Add abstract methods for behaviors that differ by character type
-
-**Example:**
-```csharp
-public abstract class CharacterBase : ICharacter
-{
-    public string Name { get; set; }
-    public int HitPoints { get; set; }
-    public int Level { get; set; }
-
-    protected CharacterBase(string name, int hitPoints, int level)
-    {
-        Name = name;
-        HitPoints = hitPoints;
-        Level = level;
-    }
-
-    public virtual void Attack(ICharacter target)
-    {
-        Console.WriteLine($"{Name} attacks {target.Name}!");
-    }
-
-    // Derived classes MUST implement this
-    public abstract void PerformSpecialAction();
-}
-```
-
-### Task 3: Create Derived Classes
-
-**What to do:**
-- Have your character classes inherit from `CharacterBase`
-- Implement the abstract `PerformSpecialAction` method
-
-**Example:**
-```csharp
-public class Warrior : CharacterBase
-{
-    public Warrior(string name, int hitPoints, int level)
-        : base(name, hitPoints, level) { }
-
-    public override void PerformSpecialAction()
-    {
-        Console.WriteLine($"{Name} performs a powerful sword strike!");
-    }
-}
-
-public class Mage : CharacterBase
-{
-    public Mage(string name, int hitPoints, int level)
-        : base(name, hitPoints, level) { }
-
-    public override void PerformSpecialAction()
-    {
-        Console.WriteLine($"{Name} casts a fireball!");
-    }
-}
-```
-
-### Task 4: Update GameEngine for DIP
-
-**What to do:**
-- GameEngine should receive dependencies through its constructor
-- Work with abstractions (interfaces/abstract classes), not concrete types
-
----
-
-## Stretch Goal (+10%)
-
-**Add Additional Character Types**
-
-Create 2+ additional character classes with unique special actions:
-- `Healer` with a healing ability
-- `Rogue` with a stealth ability
-- Your own creative class
-
----
-
-## Abstract vs Interface
-
-| Feature | Interface | Abstract Class |
-|---------|-----------|----------------|
-| Can have code? | No (just signatures) | Yes (shared implementation) |
-| Multiple inheritance? | Yes | No |
-| When to use | Define a contract | Share code between related classes |
-
-**Use interfaces when:** different class families need same behavior
-**Use abstract classes when:** related classes share common code
-
----
-
-## Grading Rubric
-
-| Criteria | Points | Description |
-|----------|--------|-------------|
-| DIP Implementation | 30 | GameEngine depends on abstractions, not concretions |
-| CharacterBase Class | 25 | Proper abstract class with shared properties/methods |
-| Derived Classes | 25 | Character classes inherit and implement abstract methods |
-| Integration | 10 | Everything works together in GameEngine |
-| Code Quality | 10 | Clean, readable, well-commented |
-| **Total** | **100** | |
-| **Stretch: Additional Classes** | **+10** | 2+ additional character types with unique behaviors |
-
----
-
-## How This Connects to the Final Project
-
-- `CharacterBase` evolves into your `Player` and `Monster` base classes
-- DIP prepares you for dependency injection in EF Core (Week 9+)
-- Abstract classes are used throughout the final project
-- This completes the SOLID foundation for the semester
-
----
-
-## Looking Ahead: From IFileHandler to IContext
-
-In Week 4, `IFileHandler` worked great for one entity type (Characters). But what happens when your game needs **multiple entity types**?
-
-**The Problem:**
-```csharp
-// Week 4 approach - separate handlers for each type?
-IFileHandler characterHandler = new JsonFileHandler("characters.json");
-IFileHandler monsterHandler = new JsonFileHandler("monsters.json");
-IFileHandler itemHandler = new JsonFileHandler("items.json");
-// This gets messy fast!
-```
-
-**The Solution (Week 7):**
-```csharp
-// IContext manages ALL entity types in one place
-public interface IContext
-{
-    List<Player> Players { get; set; }
-    List<MonsterBase> Monsters { get; set; }
-    List<Item> Items { get; set; }
-
-    void Read();
-    void Write(Player player);
-    void Write(MonsterBase monster);
-    int SaveChanges();  // Save everything at once!
-}
-```
-
-**Why this matters for the midterm:**
-- The midterm codebase uses `IContext` and `GameContext`
-- `GameContext` is like a "fake DbContext" using JSON files
-- Understanding this pattern is critical for the exam
-- In Week 9, `IContext` becomes the real `DbContext` with EF Core
-
-**The evolution:**
-```
-IFileHandler (Week 4)     →     IContext (Week 7)     →     DbContext (Week 9)
-Single entity type              Multiple entity types        Real database
+// Sum defense from equipped armor
+int defenseBonus = player.Items
+    .Where(item => item.IsEquipped && item.Type == "Armor")
+    .Sum(item => item.DefenseBonus);
 ```
 
 ---
 
-## Tips
+## How to Prepare
 
-- Abstract classes can have both implemented and abstract members
-- Use `protected` for members only derived classes should access
-- Call base constructor with `: base(...)` syntax
-- The `override` keyword is required when implementing abstract methods
+1. **Review the code** - Understand every file in this template
+2. **Practice modifications** - Try adding monsters, items, rooms
+3. **Know your LINQ** - `Where`, `FirstOrDefault`, `Sum`, `Select`
+4. **Understand inheritance** - How to create and extend abstract classes
+5. **Review SOLID** - Know why code is structured this way
 
 ---
 
-## Submission
+## Exam Day Tips
 
-1. Commit your changes with a meaningful message
-2. Push to your GitHub Classroom repository
-3. Submit the repository URL in Canvas
+- Read the requirements carefully before coding
+- Start with the simplest task
+- Test frequently - don't write everything then test
+- Use the patterns you see in existing code
+- Ask for clarification if requirements are unclear
 
 ---
 
 ## Resources
 
-- [Dependency Inversion Principle](https://stackify.com/solid-design-dependency-inversion-principle/)
-- [Abstract Classes in C#](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/abstract-and-sealed-classes-and-class-members)
-- [SOLID Principles Overview](https://www.freecodecamp.org/news/solid-principles-every-developer-should-know/)
+- [LINQ Documentation](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/linq/)
+- [Abstract Classes](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/abstract-and-sealed-classes-and-class-members)
+- [Working with JSON](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-overview)
 
 ---
 
-## Need Help?
+## Questions?
 
-- Post questions in the Canvas discussion board
+- Post in Canvas discussion board
 - Attend office hours
-- Review the in-class repository for additional examples
+- Ask during class
+
+Good luck with your preparation!

@@ -1,0 +1,44 @@
+[
+  {
+    "Id": 1,
+    "Name": "Hero",
+    "CharacterClass": "Warrior",
+    "Level": 5,
+    "Hp": 100,
+    "MaxHp": 100,
+    "AbilityScores": {
+      "Strength": 16,
+      "Dexterity": 12,
+      "Constitution": 14,
+      "Intelligence": 10,
+      "Wisdom": 10,
+      "Charisma": 8
+    },
+    "Items": [
+      {
+        "Id": 1,
+        "Name": "Iron Sword",
+        "Type": "Weapon",
+        "AttackBonus": 5,
+        "DefenseBonus": 0,
+        "IsEquipped": true
+      },
+      {
+        "Id": 2,
+        "Name": "Leather Armor",
+        "Type": "Armor",
+        "AttackBonus": 0,
+        "DefenseBonus": 3,
+        "IsEquipped": true
+      },
+      {
+        "Id": 4,
+        "Name": "Health Potion",
+        "Type": "Consumable",
+        "AttackBonus": 0,
+        "DefenseBonus": 0,
+        "IsEquipped": false
+      }
+    ]
+  }
+]

@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>ConsoleRpg</RootNamespace>
+    <AssemblyName>ConsoleRpg</AssemblyName>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Copy input files to the output directory (bin/Debug/net10.0/Input) -->
+    <None Update="Input\input.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Input\input.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Copy appsettings to output -->
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <!-- Copy ConsoleRpgEntities JSON data files to output -->
+    <None Update="..\ConsoleRpgEntities\Files\players.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>Files\players.json</Link>
+    </None>
+    <None Update="..\ConsoleRpgEntities\Files\monsters.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Link>Files\monsters.json</Link>
+    </None>
+    <None Update="..\ConsoleRpgEntities\Files\items.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <Link>Files\items.json</Link>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CsvHelper" Version="33.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ConsoleRpgEntities\ConsoleRpgEntities.csproj" />
+  </ItemGroup>
+
+</Project>
