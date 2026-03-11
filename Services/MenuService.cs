@@ -36,7 +36,7 @@ public class MenuService
     public void DisplayWelcome()
     {
         Console.WriteLine("=== Console RPG Character Manager ===");
-        Console.WriteLine("Week 5: LSP & ISP\n");
+        Console.WriteLine("Week 6: DIP\n");
     }
 
     /// <summary>

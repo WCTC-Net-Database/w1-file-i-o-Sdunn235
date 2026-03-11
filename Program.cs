@@ -90,17 +90,16 @@ class Program
     }
 
     /// <summary>
-    /// Demonstrates the W5 GameEngine with LSP + ISP in action.
-    /// Creates a mixed list of entities and processes each one.
-    /// The GameEngine only knows about IEntity and IFileHandler (abstractions).
-    /// DIP: dependencies are injected — GameEngine never creates concrete types itself.
+    /// Demonstrates W6 GameEngine with DIP and Abstract Classes.
+    /// GameEngine depends on abstractions (IEntity, IFileHandler), not concrete types.
+    /// Dependencies are injected via constructor, demonstrating Dependency Inversion Principle.
+    /// All entities implement abstract PerformSpecialAction method from CharacterBase.
     /// </summary>
     private static void RunGameEngineDemo()
     {
         Console.WriteLine("=== W6: GameEngine Demo (DIP + Abstract Classes) ===\n");
 
-        // DIP: inject the IFileHandler abstraction — GameEngine doesn't know if it's CSV or JSON
-        // Build a list of mixed entities — GameEngine only sees IEntity (abstraction)
+        // DIP: Create a mixed list of entities — GameEngine only sees IEntity (abstraction)
         var entities = new List<IEntity>
         {
             new Ghost("Shade", 3, 20),
@@ -111,20 +110,11 @@ class Program
             new Paladin("Aldric", 3, 32, "sword|shield|holy symbol")
         };
 
-        // DIP: inject IFileHandler — GameEngine depends on the abstraction, not CsvFileHandler
+        // DIP: Inject IFileHandler and List<IEntity> — GameEngine depends on abstractions, not concretions
         var engine = new GameEngine(_fileHandler, entities);
 
-        // W6: Show characters loaded via the injected IFileHandler (DIP demo)
-        Console.WriteLine("--- Characters loaded via IFileHandler (DIP) ---");
-        engine.DisplayLoadedCharacters();
-
-        // Run using direct 'is' checks + PerformSpecialAction (abstract class demo)
-        Console.WriteLine("--- Direct processing (is keyword + PerformSpecialAction) ---");
+        // Process all entities - demonstrates abstract PerformSpecialAction being called polymorphically
         engine.RunTurn();
-
-        // Run using Command Pattern (Stretch Goal)
-        Console.WriteLine("--- Command queue (Command Pattern stretch goal) ---");
-        engine.RunTurnWithCommands();
 
         Console.WriteLine("\nPress any key to continue to the Character Manager...");
         Console.ReadKey();
