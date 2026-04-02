@@ -30,7 +30,7 @@ public class MonsterDao : IEntityDao<MonsterBase>
             m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     public void Add(MonsterBase entity) =>
-        _context.Monsters.Add(entity);
+        _context.AddEntity(entity);
 
     public void Update(MonsterBase entity)
     {
@@ -47,6 +47,6 @@ public class MonsterDao : IEntityDao<MonsterBase>
     {
         var entity = GetById(id);
         if (entity != null)
-            _context.Monsters.Remove(entity);
+            _context.RemoveEntity(entity);
     }
 }

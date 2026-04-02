@@ -1,17 +1,23 @@
 using ConsoleRpg;
 
 /// <summary>
-/// Week 7: Midterm Prep — W7 Console RPG Entry Point
+/// Week 9: EF Core Intro â€” Console RPG Entry Point
 ///
 /// Program.cs is intentionally minimal. All dependency wiring lives in Startup.cs (DIP).
-/// This file is the application entry point only — it starts the app and runs the main loop.
+/// This file is the application entry point only â€” it starts the app and runs the main loop.
 ///
 /// Menu options:
-///   1. Start Combat       — W7 game loop (IContext + BattleService + LINQ)
-///   2. View Player        — display player stats and equipped items
-///   3. Reset Battle       — restore monsters + heal player to full HP
-///   4. Character Manager  — W6 CSV/JSON character manager (IFileHandler)
-///   5. W6 GameEngine Demo — W6 entity-turn demo (DIP + Abstract Classes)
+///   1. Start Combat        â€” W7 game loop (FileContext + BattleService + LINQ)
+///   2. View Player         â€” display player stats and equipped items
+///   3. Reset Battle        â€” restore monsters + heal player to full HP
+///   4. Character Manager   â€” W6 CSV/JSON character manager (IFileHandler)
+///   5. W6 GameEngine Demo  â€” W6 entity-turn demo (DIP + Abstract Classes)
+///   --- W9: EF Core ---
+///   6. Display Characters  â€” list all characters from SQL Server
+///   7. Find Character      â€” LINQ search by name
+///   8. Add Character       â€” create character with room association
+///   9. Add Room            â€” create a new room
+///  10. Level Up Character  â€” increment character level (stretch goal)
 ///   0. Exit
 /// </summary>
 /// <remarks>
@@ -29,6 +35,7 @@ while (running)
 
     switch (choice)
     {
+        // W7: File-backed features (FileContext / JSON)
         case "1":
             Startup.GameEngine.RunCombat();
             break;
@@ -44,6 +51,27 @@ while (running)
         case "5":
             Startup.GameEngineDemo.Run();
             break;
+
+        // W9: Database-backed features (GameContext / EF Core / SQL Server)
+        case "6":
+            Startup.GameEngine.DisplayCharacters();
+            break;
+        case "7":
+            Startup.GameEngine.FindCharacter();
+            break;
+        case "8":
+            Startup.GameEngine.AddCharacter();
+            break;
+        case "9":
+            Startup.GameEngine.AddRoom();
+            break;
+        case "10":
+            Startup.GameEngine.LevelUpCharacter();
+            break;
+        case "11":
+            Startup.GameEngine.DisplayRooms();
+            break;
+
         case "0":
             running = false;
             Startup.GameUi.DisplayMessage("Goodbye, adventurer!");

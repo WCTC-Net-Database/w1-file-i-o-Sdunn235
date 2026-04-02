@@ -1,80 +1,70 @@
-using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using ConsoleRpgEntities.Models;
 
 namespace ConsoleRpgEntities.Data;
 
 /// <summary>
-/// Primary data context — loads all game entities from JSON files into memory.
-/// Implements IContext so ConsoleRpg always depends on the abstraction, not this class.
+/// EF Core database context — manages the SQL Server connection and entity persistence.
+/// Implements both DbContext (EF Core machinery) and IContext (our DIP abstraction).
 ///
-/// OCP: Adding a new entity type (e.g., Rooms) only requires adding a new list,
-/// a new JSON file, and updating Read/Write/SaveChanges — no changes to ConsoleRpg.
+/// Week 9: This is the real-database counterpart to FileContext (JSON-backed).
+///         Both satisfy IContext — business logic never knows which back-end is in use.
 ///
-/// Week 9: This class is replaced by DbContext backed by a real database.
-/// ConsoleRpg needs zero changes because it only ever saw IContext.
+/// DbSet properties give EF Core the table mappings.
+/// IContext properties expose them as IEnumerable for downstream consumers.
+/// AddEntity/RemoveEntity delegate to EF Core's generic Set&lt;T&gt;() methods.
+/// SaveChanges() is inherited from DbContext and satisfies IContext automatically.
 /// </summary>
-public class GameContext : IContext
+public class GameContext : DbContext, IContext
 {
-    private readonly string _playersPath;
-    private readonly string _monstersPath;
-    private readonly string _itemsPath;
+    // EF Core DbSets — these map to SQL Server tables
+    public DbSet<Room> Rooms { get; set; }
+    public DbSet<Character> Characters { get; set; }
 
-    private static readonly JsonSerializerOptions _jsonOptions = new()
+    // IContext — existing entity collections (not DB-backed yet — returns empty)
+    // These can be migrated to DbSets in future weeks as needed.
+    IEnumerable<Player> IContext.Players => Enumerable.Empty<Player>();
+    IEnumerable<MonsterBase> IContext.Monsters => Enumerable.Empty<MonsterBase>();
+    IEnumerable<Item> IContext.Items => Enumerable.Empty<Item>();
+
+    // IContext — W9 entity collections backed by DbSets
+    IEnumerable<Room> IContext.Rooms => Rooms;
+    IEnumerable<Character> IContext.Characters => Characters;
+
+    /// <summary>
+    /// Adds an entity to the appropriate DbSet via EF Core's generic Set resolution.
+    /// Same contract as FileContext.AddEntity — different implementation, same abstraction.
+    /// </summary>
+    public void AddEntity<T>(T entity) where T : class
     {
-        WriteIndented = true,
-        PropertyNameCaseInsensitive = true
-    };
-
-    public List<Player> Players { get; private set; } = new();
-    public List<MonsterBase> Monsters { get; private set; } = new();
-    public List<Item> Items { get; private set; } = new();
-
-    public GameContext(string playersPath, string monstersPath, string itemsPath)
-    {
-        _playersPath = playersPath;
-        _monstersPath = monstersPath;
-        _itemsPath = itemsPath;
-    }
-
-    /// <summary>Loads all entities from their JSON files into the in-memory lists.</summary>
-    public void Read()
-    {
-        Players = LoadJson<List<Player>>(_playersPath) ?? new List<Player>();
-        Monsters = LoadJson<List<MonsterBase>>(_monstersPath) ?? new List<MonsterBase>();
-        Items = LoadJson<List<Item>>(_itemsPath) ?? new List<Item>();
-    }
-
-    /// <summary>Adds an entity to the appropriate in-memory list based on its type.</summary>
-    public void Write(object entity)
-    {
-        switch (entity)
-        {
-            case Player player:
-                Players.Add(player);
-                break;
-            case MonsterBase monster:
-                Monsters.Add(monster);
-                break;
-            case Item item:
-                Items.Add(item);
-                break;
-        }
+        Set<T>().Add(entity);
     }
 
     /// <summary>
-    /// Persists player state to players.json.
-    /// Monsters are intentionally NOT saved here — monsters.json is the permanent source
-    /// of truth that ResetBattle() reads back from. Writing damaged monster state would
-    /// prevent the battle from ever resetting correctly.
+    /// Removes an entity from the appropriate DbSet via EF Core's generic Set resolution.
     /// </summary>
-    public void SaveChanges()
+    public void RemoveEntity<T>(T entity) where T : class
     {
-        File.WriteAllText(_playersPath, JsonSerializer.Serialize(Players, _jsonOptions));
+        Set<T>().Remove(entity);
     }
 
-    private static T? LoadJson<T>(string path)
+    /// <summary>
+    /// Explicit IContext.SaveChanges implementation.
+    /// DbContext.SaveChanges() returns int (rows affected), but IContext expects void.
+    /// This bridges the two contracts.
+    /// </summary>
+    void IContext.SaveChanges()
     {
-        if (!File.Exists(path)) return default;
-        return JsonSerializer.Deserialize<T>(File.ReadAllText(path), _jsonOptions);
+        base.SaveChanges();
+    }
+
+    /// <summary>
+    /// Configures the SQL Server connection.
+    /// Uses LocalDB — the lightweight SQL Server instance that ships with Visual Studio.
+    /// </summary>
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseSqlServer(
+            "Server=(localdb)\\mssqllocaldb;Database=ConsoleRPG;Trusted_Connection=True;");
     }
 }

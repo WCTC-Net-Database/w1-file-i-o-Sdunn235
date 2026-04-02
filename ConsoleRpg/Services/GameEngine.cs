@@ -3,17 +3,21 @@ using ConsoleRpg.Services.Commands;
 using ConsoleRpg.UI;
 using ConsoleRpgEntities.Data;
 using ConsoleRpgEntities.Models;
+using Microsoft.EntityFrameworkCore;
+// Alias to resolve W6 Character (abstract class) vs W9 Character (EF entity) namespace collision
+using EfCharacter = ConsoleRpgEntities.Models.Character;
 
 namespace ConsoleRpg.Services;
 
 /// <summary>
 /// Runs the game loop and processes entities.
 ///
-/// Two constructors support two contexts:
-///   W6 constructor: (IFileHandler, List&lt;IEntity&gt;) — powers RunTurn() and the entity demo.
-///   W7 constructor: (IContext, IPlayerService, IBattleService, IGameUi) — powers RunCombat().
+/// Three constructors support three contexts:
+///   W6 constructor: (IFileHandler, List&lt;IEntity&gt;) â€” powers RunTurn() and the entity demo.
+///   W7 constructor: (IContext, IPlayerService, IBattleService, IGameUi) â€” powers RunCombat().
+///   W9 constructor: Extends W7 with a second IContext for EF Core database operations.
 ///
-/// DIP: Both constructors depend only on abstractions — no concrete types anywhere.
+/// DIP: All constructors depend only on abstractions â€” no concrete types anywhere.
 /// </summary>
 public class GameEngine
 {
@@ -27,6 +31,9 @@ public class GameEngine
     private readonly IBattleService? _battleService;
     private readonly IGameUi? _gameUi;
 
+    // W9 field â€” EF Core database context (accessed through IContext abstraction)
+    private readonly IContext? _dbContext;
+
     /// <summary>
     /// W6 Constructor: used by GameEngineDemo for the entity-turn demonstration.
     /// DIP in action: GameEngine never creates its own CsvFileHandler or concrete entity.
@@ -38,23 +45,37 @@ public class GameEngine
     }
 
     /// <summary>
-    /// W7 Constructor: used by Startup for the full game loop.
-    /// All four parameters are abstractions — Startup decides which concretions to inject.
+    /// W7 Constructor: used when only file-based context is needed (no EF Core).
+    /// All four parameters are abstractions â€” Startup decides which concretions to inject.
     /// </summary>
     public GameEngine(IContext context, IPlayerService playerService,
                       IBattleService battleService, IGameUi gameUi)
+        : this(context, playerService, battleService, gameUi, dbContext: null)
     {
-        _context = context;
+    }
+
+    /// <summary>
+    /// W9 Constructor: full game engine with both file-based and EF Core contexts.
+    /// fileContext powers W7 combat features (JSON-backed).
+    /// dbContext powers W9 CRUD features (SQL Server-backed).
+    /// Both are IContext â€” business logic never knows which back-end is in use.
+    /// </summary>
+    public GameEngine(IContext fileContext, IPlayerService playerService,
+                      IBattleService battleService, IGameUi gameUi,
+                      IContext? dbContext)
+    {
+        _context = fileContext;
         _playerService = playerService;
         _battleService = battleService;
         _gameUi = gameUi;
+        _dbContext = dbContext;
         _entities = new List<IEntity>();
         _fileHandler = null!;
     }
 
     /// <summary>
     /// Uses the injected IFileHandler to read and display all characters from the data source.
-    /// DIP demo: GameEngine calls _fileHandler.ReadAll() on an abstraction —
+    /// DIP demo: GameEngine calls _fileHandler.ReadAll() on an abstraction ï¿½
     /// it has no idea whether the source is CSV, JSON, or anything else.
     /// </summary>
     public void DisplayLoadedCharacters()
@@ -100,28 +121,28 @@ public class GameEngine
     /// <param name="entity">The entity to process.</param>
     public void ProcessEntity(IEntity entity)
     {
-        // All entities can attack — safe to call directly
+        // All entities can attack ï¿½ safe to call directly
         entity.Attack();
 
-        // Only call Defend() if the entity implements IDefendable — LSP safe
+        // Only call Defend() if the entity implements IDefendable ï¿½ LSP safe
         if (entity is IDefendable defendingEntity)
         {
             defendingEntity.Defend();
         }
 
-        // Only call Fly() if the entity implements IFlyable — LSP safe
+        // Only call Fly() if the entity implements IFlyable ï¿½ LSP safe
         if (entity is IFlyable flyingEntity)
         {
             flyingEntity.Fly();
         }
 
-        // Only call Shoot() if the entity implements IShootable — LSP safe
+        // Only call Shoot() if the entity implements IShootable ï¿½ LSP safe
         if (entity is IShootable shootingEntity)
         {
             shootingEntity.Shoot();
         }
 
-        // Only call Swim() if the entity implements ISwimmable — LSP safe
+        // Only call Swim() if the entity implements ISwimmable ï¿½ LSP safe
         if (entity is ISwimmable swimmingEntity)
         {
             swimmingEntity.Swim();
@@ -172,12 +193,12 @@ public class GameEngine
     }
 
     // -------------------------------------------------------------------------
-    // W7 Methods — use IContext, IPlayerService, IBattleService, IGameUi
+    // W7 Methods ï¿½ use IContext, IPlayerService, IBattleService, IGameUi
     // -------------------------------------------------------------------------
 
     /// <summary>
     /// Runs one round of combat between the player and the first available monster.
-    /// BattleService handles all LINQ damage calculations — GameEngine only orchestrates.
+    /// BattleService handles all LINQ damage calculations ï¿½ GameEngine only orchestrates.
     /// AutoSaveDecorator on IPlayerService persists changes automatically after update.
     /// </summary>
     public void RunCombat()
@@ -192,7 +213,7 @@ public class GameEngine
         if (player == null) { _gameUi.DisplayMessage("No player found. Check players.json."); return; }
 
         var monsters = _context.Monsters.Where(m => m.Hp > 0).ToList();
-        if (!monsters.Any()) { _gameUi.DisplayMessage("No monsters remain — you've won!"); return; }
+        if (!monsters.Any()) { _gameUi.DisplayMessage("No monsters remain ï¿½ you've won!"); return; }
 
         _gameUi.DisplayPlayer(player);
         _gameUi.DisplayMonsters(monsters);
@@ -207,7 +228,7 @@ public class GameEngine
         {
             monster.PerformSpecialAction();
             _gameUi.DisplayMessage($"{monster.Name} has been defeated!");
-            _context.Monsters.Remove(monster);
+            _context.RemoveEntity(monster);
         }
 
         if (player.Hp <= 0)
@@ -218,7 +239,7 @@ public class GameEngine
         }
         else
         {
-            // AutoSaveDecorator handles SaveChanges — no explicit save call needed here
+            // AutoSaveDecorator handles SaveChanges ï¿½ no explicit save call needed here
             _playerService.UpdatePlayer(player);
         }
     }
@@ -232,8 +253,11 @@ public class GameEngine
     {
         if (_context == null || _playerService == null || _gameUi == null) return;
 
-        // Re-read all JSON data — monsters restore to their original HP values
-        _context.Read();
+        // Re-read all JSON data â€” monsters restore to their original HP values
+        // Read() is a FileContext-specific operation (reloads from JSON files).
+        // Safe cast: ResetBattle only applies to the file-backed context.
+        if (_context is FileContext fileContext)
+            fileContext.Read();
 
         // Heal player back to full
         var player = _playerService.GetAllPlayers().FirstOrDefault();
@@ -243,7 +267,7 @@ public class GameEngine
             _playerService.UpdatePlayer(player);
         }
 
-        _gameUi.DisplayMessage("Battle reset — all monsters restored and player healed to full HP.");
+        _gameUi.DisplayMessage("Battle reset ï¿½ all monsters restored and player healed to full HP.");
     }
 
     /// <summary>
@@ -257,5 +281,191 @@ public class GameEngine
         if (player == null) { _gameUi.DisplayMessage("No player found."); return; }
 
         _gameUi.DisplayPlayer(player);
+    }
+
+    // -------------------------------------------------------------------------
+    // W9 Methods â€” use _dbContext (EF Core IContext) for database CRUD
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// Displays all characters in the database with their room assignments.
+    /// Uses EF Core Include() for eager loading of the Room navigation property.
+    /// LINQ: ToList() materializes the query, Include() joins related data.
+    /// </summary>
+    public void DisplayCharacters()
+    {
+        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
+
+        // Cast to IQueryable for Include() support â€” IEnumerable alone can't do eager loading.
+        // This is safe because the EF Core GameContext backs Characters with a DbSet.
+        var characters = _dbContext.Characters
+            .AsQueryable()
+            .Cast<EfCharacter>()
+            .Include(c => c.Room)
+            .ToList();
+
+        if (!characters.Any())
+        {
+            Console.WriteLine("\nNo characters found in the database.");
+            return;
+        }
+
+        Console.WriteLine("\n=== Characters (EF Core â€” SQL Server) ===\n");
+        foreach (var c in characters)
+        {
+            Console.WriteLine($"  [{c.Id}] {c.Name} (Level {c.Level}) â€” Room: {c.Room?.Name ?? "None"}");
+        }
+    }
+
+    /// <summary>
+    /// Searches for a character by name using LINQ.
+    /// Uses FirstOrDefault with a Contains predicate for partial matching.
+    /// </summary>
+    public void FindCharacter()
+    {
+        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
+
+        Console.Write("Enter character name to search: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        var character = _dbContext.Characters
+            .OfType<EfCharacter>()
+            .FirstOrDefault(c => c.Name.Contains(name));
+
+        if (character != null)
+        {
+            Console.WriteLine($"\nFound: {character.Name} (Level {character.Level})");
+        }
+        else
+        {
+            Console.WriteLine("\nCharacter not found.");
+        }
+    }
+
+    /// <summary>
+    /// Creates a new character and associates it with an existing room.
+    /// Validates that the room exists before creating the character.
+    /// Uses AddEntity + SaveChanges to persist to SQL Server.
+    /// </summary>
+    public void AddCharacter()
+    {
+        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
+
+        Console.Write("Enter character name: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        Console.Write("Enter character level: ");
+        if (!int.TryParse(Console.ReadLine(), out var level))
+        {
+            Console.WriteLine("Invalid level.");
+            return;
+        }
+
+        Console.Write("Enter room ID for the character: ");
+        if (!int.TryParse(Console.ReadLine(), out var roomId))
+        {
+            Console.WriteLine("Invalid room ID.");
+            return;
+        }
+
+        // Validate the room exists before creating the character
+        var room = _dbContext.Rooms
+            .OfType<Room>()
+            .FirstOrDefault(r => r.Id == roomId);
+
+        if (room == null)
+        {
+            Console.WriteLine("Room not found!");
+            return;
+        }
+
+        var character = new EfCharacter
+        {
+            Name = name,
+            Level = level,
+            RoomId = roomId
+        };
+
+        _dbContext.AddEntity(character);
+        _dbContext.SaveChanges();
+
+        Console.WriteLine($"\nCharacter '{name}' added to {room.Name}.");
+    }
+
+    /// <summary>
+    /// Creates a new room in the database.
+    /// Uses AddEntity + SaveChanges to persist to SQL Server.
+    /// </summary>
+    public void AddRoom()
+    {
+        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
+
+        Console.Write("Enter room name: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        Console.Write("Enter room description: ");
+        var description = Console.ReadLine() ?? string.Empty;
+
+        var room = new Room
+        {
+            Name = name,
+            Description = description
+        };
+
+        _dbContext.AddEntity(room);
+        _dbContext.SaveChanges();
+
+        Console.WriteLine($"\nRoom '{name}' added to the game.");
+    }
+
+    /// <summary>
+    /// Displays all rooms in the database with their ID, name, and description.
+    /// Useful as a reference before adding a character (which requires a room ID).
+    /// </summary>
+    public void DisplayRooms()
+    {
+        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
+
+        var rooms = _dbContext.Rooms.ToList();
+
+        if (!rooms.Any())
+        {
+            Console.WriteLine("\nNo rooms found in the database.");
+            return;
+        }
+
+        Console.WriteLine("\n=== Rooms (EF Core â€” SQL Server) ===\n");
+        foreach (var r in rooms)
+        {
+            Console.WriteLine($"  [{r.Id}] {r.Name} â€” {r.Description}");
+        }
+    }
+
+    /// <summary>
+    /// Stretch Goal: Finds a character by exact name and increments their level.
+    /// Demonstrates EF Core change tracking â€” modifying the entity in memory
+    /// and calling SaveChanges() generates an UPDATE SQL statement automatically.
+    /// </summary>
+    public void LevelUpCharacter()
+    {
+        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
+
+        Console.Write("Enter character name: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        var character = _dbContext.Characters
+            .OfType<EfCharacter>()
+            .FirstOrDefault(c => c.Name == name);
+
+        if (character != null)
+        {
+            character.Level++;
+            _dbContext.SaveChanges();
+            Console.WriteLine($"\n{character.Name} is now level {character.Level}!");
+        }
+        else
+        {
+            Console.WriteLine("\nCharacter not found.");
+        }
     }
 }

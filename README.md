@@ -1,209 +1,406 @@
-﻿# Week 7: Midterm Preparation
+﻿# Week 9: Entity Framework Core Introduction
 
-> **Template Purpose:** This template provides the codebase you'll work with during the midterm exam. Review it thoroughly before the exam.
+## Completion Notes
+
+> **Status:** All tasks complete — ready for submission.
+
+| Item | Status |
+|------|--------|
+| Option A (continued own repo) | Used |
+| Task 1: EF Core Setup | Done |
+| Task 2: Create GameContext | Done |
+| Task 3: Migrations | Done |
+| Task 4: Add Room | Done |
+| Task 5: Add Character | Done |
+| Task 6: Find Character | Done |
+| Stretch Goal: Level Up Character (+10%) | Done |
+| Bonus: Display Rooms | Done |
+
+**Architecture approach:** Rather than starting from the template, this project evolved the existing W7 architecture. `IContext` was refactored so both `FileContext` (JSON) and `GameContext` (EF Core DbContext) implement the same contract. W7 combat features and W9 database features coexist through dependency injection — business logic never knows which backend is in use.
+
+**See also:** [User Guide](USER_GUIDE.md) | [Architecture Guide](ARCHITECTURE_GUIDE.md)
+
+---
+
+> **Template Purpose:** This template represents a working solution through Week 8. Use YOUR repo if you're caught up. Use this as a fresh start if needed.
+
+---
+
+## How to Use This Template
+
+### Option A: Continue Your Own Repository (Recommended)
+If you're caught up from the midterm:
+1. **DO NOT** clone this template
+2. Continue working in your existing repository
+3. Follow this README to add EF Core to YOUR project
+4. Reference the template code if you get stuck
+
+### Option B: Fresh Start (If Behind)
+If you've fallen behind or your code has issues:
+1. Accept this GitHub Classroom assignment
+2. This becomes your new "main" repository going forward
+3. Complete this week's tasks in the template
+
+> **Note:** The jump to EF Core is significant. Starting fresh with a known-good foundation can sometimes be better than debugging EF Core + existing problems.
 
 ---
 
 ## Overview
 
-**There is no assignment this week.** Instead, focus on reviewing this code and preparing for the in-class midterm exam. The exam will test your ability to modify and extend an existing codebase using the concepts from Weeks 1-6.
+This week introduces **Entity Framework Core** - Microsoft's modern object-relational mapper (ORM) for .NET. You'll transition from file-based storage (CSV/JSON) to a real SQL Server database.
 
-## What to Study
+### Remember Weeks 4 and 7? This is the Payoff!
 
-The midterm will assess your understanding of:
-
-| Concept | Where You Learned It |
-|---------|---------------------|
-| File I/O (JSON) | Weeks 1-4 |
-| LINQ queries | Weeks 3, 7 |
-| Interfaces | Weeks 4-5 |
-| Abstract classes | Week 6 |
-| SOLID principles | Weeks 3-6 |
-| Inheritance | Weeks 5-6 |
-
-### The IContext Pattern (Key Concept!)
-
-Remember `IFileHandler` from Week 4? This template introduces `IContext` - the next evolution:
+You've been building toward this moment:
 
 ```
-Week 4: IFileHandler              Week 7: IContext
-├── ReadAll()                     ├── Players (List)
-├── WriteAll()                    ├── Monsters (List)
-├── FindByName()         →        ├── Items (List)
-├── FindByProfession()            ├── Read()
-└── AppendCharacter()             ├── Write(entity)
-                                  └── SaveChanges()
+Week 4:  IFileHandler                 Week 7:  IContext                  Week 9:  DbContext
+├── ReadAll()                         ├── Players (List)                 ├── Players (DbSet)
+├── WriteAll()                        ├── Monsters (List)                ├── Monsters (DbSet)
+├── Find methods              →       ├── Read()                  →      ├── LINQ queries
+└── CsvFileHandler                    ├── Write(entity)                  ├── Add(entity)
+    JsonFileHandler                   └── SaveChanges()                  └── SaveChanges()
 ```
 
-**Why the change?**
-- `IFileHandler` works with one entity type (Characters)
-- `IContext` works with multiple entity types (Players, Monsters, Items)
-- `SaveChanges()` mimics how databases work - you make changes in memory, then save them all at once
+**The pattern is the same:**
+- Week 4: You swapped CSV for JSON without changing business logic
+- Week 7: `IContext` added `SaveChanges()` - just like DbContext!
+- Week 9: `DbContext` is the real deal - same pattern, real database
 
-**Coming in Week 9:** `IContext` becomes `DbContext` with real database support!
+Your business logic doesn't care where data comes from. Whether it's CSV files, JSON files, or SQL Server - the pattern remains: **depend on abstractions, swap implementations.**
+
+## Learning Objectives
+
+By completing this assignment, you will:
+- [x] Set up Entity Framework Core with SQL Server
+- [x] Create a DbContext to manage database connections
+- [x] Generate and apply database migrations
+- [x] Perform basic CRUD operations (Create, Read, Update, Delete)
+- [x] Use LINQ with EF Core to query the database
+
+## Prerequisites
+
+Before starting, ensure you have:
+- [x] Completed Week 8 midterm (or are using this template)
+- [x] SQL Server installed (LocalDB or full SQL Server)
+- [x] Understanding of interfaces and SOLID principles
+- [x] Working LINQ knowledge
+
+## What's New This Week
+
+| Concept | Description |
+|---------|-------------|
+| Entity Framework Core | ORM that maps C# classes to database tables |
+| `DbContext` | Class that manages database connections and operations |
+| `DbSet<T>` | Represents a table in the database |
+| Migrations | Version control for your database schema |
+| Connection String | Configuration for connecting to SQL Server |
 
 ---
 
-## What's in This Template
+## Assignment Tasks
 
-This template is a culmination of everything so far. Notice it uses a **two-project architecture**:
+### Task 1: Setup Entity Framework Core
+
+**What to do:**
+- Install the required NuGet packages
+
+**Commands:**
+```bash
+dotnet add package Microsoft.EntityFrameworkCore
+dotnet add package Microsoft.EntityFrameworkCore.SqlServer
+dotnet add package Microsoft.EntityFrameworkCore.Tools
+```
+
+**Verify installation:**
+```bash
+dotnet list package
+```
+
+### Task 2: Create the GameContext
+
+**What to do:**
+- Create `GameContext.cs` with `DbSet` properties for your entities
+- Configure the connection string
+
+**Example:**
+```csharp
+using Microsoft.EntityFrameworkCore;
+
+public class GameContext : DbContext
+{
+    public DbSet<Room> Rooms { get; set; }
+    public DbSet<Character> Characters { get; set; }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+    {
+        optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=ConsoleRPG;Trusted_Connection=True;");
+    }
+}
+```
+
+### Task 3: Generate and Apply Migrations
+
+**What to do:**
+- Install the EF Core CLI tools (if not already installed)
+- Generate the initial migration
+- Apply the migration to create the database
+
+**Commands:**
+```bash
+# Install EF Core tools globally
+dotnet tool install --global dotnet-ef
+
+# Verify installation
+dotnet ef
+
+# Generate migration
+dotnet ef migrations add InitialCreate
+
+# Apply migration
+dotnet ef database update
+```
+
+### Task 4: Implement Add Room Feature
+
+**What to do:**
+- Add a menu option to create a new room
+- Implement the `AddRoom()` method in GameEngine
+
+**Example:**
+```csharp
+public void AddRoom()
+{
+    Console.Write("Enter room name: ");
+    var name = Console.ReadLine();
+
+    Console.Write("Enter room description: ");
+    var description = Console.ReadLine();
+
+    var room = new Room
+    {
+        Name = name,
+        Description = description
+    };
+
+    _context.Rooms.Add(room);
+    _context.SaveChanges();
+
+    Console.WriteLine($"Room '{name}' added to the game.");
+}
+```
+
+### Task 5: Implement Add Character Feature
+
+**What to do:**
+- Add a menu option to create a new character
+- Associate the character with a room
+
+**Example:**
+```csharp
+public void AddCharacter()
+{
+    Console.Write("Enter character name: ");
+    var name = Console.ReadLine();
+
+    Console.Write("Enter character level: ");
+    var level = int.Parse(Console.ReadLine());
+
+    Console.Write("Enter room ID for the character: ");
+    var roomId = int.Parse(Console.ReadLine());
+
+    var room = _context.Rooms.Find(roomId);
+    if (room == null)
+    {
+        Console.WriteLine("Room not found!");
+        return;
+    }
+
+    var character = new Character
+    {
+        Name = name,
+        Level = level,
+        RoomId = roomId
+    };
+
+    _context.Characters.Add(character);
+    _context.SaveChanges();
+
+    Console.WriteLine($"Character '{name}' added to {room.Name}.");
+}
+```
+
+### Task 6: Implement Find Character Feature
+
+**What to do:**
+- Add a menu option to search for characters
+- Use LINQ to query the database
+
+**Example:**
+```csharp
+public void FindCharacter()
+{
+    Console.Write("Enter character name to search: ");
+    var name = Console.ReadLine();
+
+    var character = _context.Characters
+        .FirstOrDefault(c => c.Name.Contains(name));
+
+    if (character != null)
+    {
+        Console.WriteLine($"Found: {character.Name} (Level {character.Level})");
+    }
+    else
+    {
+        Console.WriteLine("Character not found.");
+    }
+}
+```
+
+---
+
+## Menu Structure
+
+Your menu should include these new options:
+```
+1. Display Characters
+2. Find Character
+3. Add Character
+4. Add Room
+5. Level Up Character
+0. Exit
+```
+
+---
+
+## Project Structure
+
+This template uses a **two-project architecture** (same as Week 7/8):
 
 ```
-ConsoleRpgFinal.sln                    # Solution file
+ConsoleRpgFinal.sln
 │
-├── ConsoleRpg/                        # UI & Game Logic Project
-│   ├── ConsoleRpg.csproj
-│   ├── Program.cs                     # Entry point with DI setup
-│   ├── Startup.cs                     # Dependency injection configuration
-│   ├── GameEngine.cs                  # Main game loop
-│   ├── appsettings.json               # Configuration settings
-│   │
-│   ├── Services/                      # Business logic
-│   │   ├── BattleService.cs           # Combat calculations
-│   │   ├── IBattleService.cs
-│   │   ├── PlayerService.cs           # Player operations
-│   │   └── IPlayerService.cs
-│   │
-│   ├── UI/                            # User interface
-│   │   ├── ConsoleGameUi.cs
-│   │   └── IGameUi.cs
-│   │
-│   ├── Decorators/                    # Decorator pattern example
-│   │   └── AutoSavePlayerServiceDecorator.cs
-│   │
-│   └── Helpers/
-│       └── ConfigurationHelper.cs
+├── ConsoleRpg/                        # UI & Game Logic
+│   ├── Program.cs                     # Entry point
+│   ├── Startup.cs                     # Dependency injection
+│   ├── GameEngine.cs                  # Game logic with EF Core
+│   └── appsettings.json               # Connection string
 │
-└── ConsoleRpgEntities/                # Data & Models Project
-    ├── ConsoleRpgEntities.csproj
-    │
-    ├── Data/                          # Data access layer
-    │   ├── GameContext.cs             # Primary data context
-    │   ├── IContext.cs                # Context interface (DIP)
-    │   ├── IEntityDao.cs              # Generic DAO interface
-    │   ├── PlayerDao.cs               # Player data operations
-    │   └── MonsterDao.cs              # Monster data operations
-    │
-    ├── Models/                        # Entity classes
-    │   ├── Player.cs                  # Player entity
-    │   ├── MonsterBase.cs             # Abstract monster base
-    │   ├── Goblin.cs                  # Goblin implementation
-    │   ├── Dragon.cs                  # Dragon implementation
-    │   ├── Item.cs                    # Equipment/items
-    │   ├── AbilityScores.cs           # Character stats
-    │   └── Attribute.cs               # Attribute enum
-    │
-    ├── Interfaces/
-    │   └── IMonster.cs
-    │
-    └── Files/                         # JSON data files
-        ├── players.json
-        ├── monsters.json
-        └── items.json
+└── ConsoleRpgEntities/                # Data & Models (EF Core lives here!)
+    ├── Data/
+    │   └── GameContext.cs             # EF Core DbContext
+    ├── Models/
+    │   ├── Character.cs               # Character entity
+    │   └── Room.cs                    # Room entity
+    └── Migrations/                    # Auto-generated by EF
 ```
 
-### Why Two Projects?
-
-This separation follows the **Separation of Concerns** principle:
-
-- **ConsoleRpg**: Handles user interaction, game flow, and business logic
-- **ConsoleRpgEntities**: Contains data models and data access (could be reused by other UIs)
-
-The ConsoleRpg project references ConsoleRpgEntities, not the other way around.
+> **Important:** When running EF commands, specify the correct project:
+> ```bash
+> dotnet ef migrations add InitialCreate --project ConsoleRpgEntities
+> dotnet ef database update --project ConsoleRpgEntities --startup-project ConsoleRpg
+> ```
 
 ---
 
-## What the Exam Might Ask You to Do
+## Stretch Goal (+10%)
 
-During the exam, you may be asked to:
+**Update Character Level**
 
-### 1. Add a New Monster Type
-- Create a new class inheriting from `MonsterBase`
-- Add it to `monsters.json`
-- Load it in `DataContext`
-
-### 2. Add a New Room
-- Create a room in the data
-- Connect it to existing rooms
-- Make sure players can navigate to it
-
-### 3. Enhance Combat
-- Modify `BattleService.cs` to add new attack types
-- Use equipped items to modify damage
-- Add special abilities
-
-### 4. Update the Menu
-- Add new menu options
-- Integrate with existing game logic
-
----
-
-## Practice Exercise
-
-Try these modifications to prepare:
-
-**Add a Dragon Monster:**
-1. Create `Dragon.cs` inheriting from `MonsterBase`
-2. Give it a `BreathFire()` special ability
-3. Add a dragon to `monsters.json`
-4. Load it in the DataContext
-
-**Add Item-Based Combat:**
-1. Look at `BattleService.cs`
-2. Calculate attack bonus from equipped items
-3. Calculate defense bonus from equipped armor
-4. Use LINQ to sum up item bonuses
-
----
-
-## LINQ Examples for Combat
+Add functionality to find and update a character's level:
 
 ```csharp
-// Sum attack bonuses from equipped weapons
-int attackBonus = player.Items
-    .Where(item => item.IsEquipped && item.Type == "Weapon")
-    .Sum(item => item.AttackBonus);
+public void LevelUpCharacter()
+{
+    Console.Write("Enter character name: ");
+    var name = Console.ReadLine();
 
-// Sum defense from equipped armor
-int defenseBonus = player.Items
-    .Where(item => item.IsEquipped && item.Type == "Armor")
-    .Sum(item => item.DefenseBonus);
+    var character = _context.Characters
+        .FirstOrDefault(c => c.Name == name);
+
+    if (character != null)
+    {
+        character.Level++;
+        _context.SaveChanges();
+        Console.WriteLine($"{character.Name} is now level {character.Level}!");
+    }
+    else
+    {
+        Console.WriteLine("Character not found.");
+    }
+}
 ```
 
 ---
 
-## How to Prepare
+## Connection String Reference
 
-1. **Review the code** - Understand every file in this template
-2. **Practice modifications** - Try adding monsters, items, rooms
-3. **Know your LINQ** - `Where`, `FirstOrDefault`, `Sum`, `Select`
-4. **Understand inheritance** - How to create and extend abstract classes
-5. **Review SOLID** - Know why code is structured this way
+Find connection string formats at [connectionstrings.com/sql-server](https://www.connectionstrings.com/sql-server/)
+
+**LocalDB (recommended for development):**
+```
+Server=(localdb)\mssqllocaldb;Database=ConsoleRPG;Trusted_Connection=True;
+```
+
+**SQL Server Express:**
+```
+Server=.\SQLEXPRESS;Database=ConsoleRPG;Trusted_Connection=True;
+```
 
 ---
 
-## Exam Day Tips
+## Grading Rubric
 
-- Read the requirements carefully before coding
-- Start with the simplest task
-- Test frequently - don't write everything then test
-- Use the patterns you see in existing code
-- Ask for clarification if requirements are unclear
+| Criteria | Points | Description |
+|----------|--------|-------------|
+| EF Core Setup | 20 | Packages installed, context created |
+| Migrations | 20 | Successfully generated and applied |
+| Add Room | 20 | Room creation works and persists |
+| Add Character | 20 | Character creation with room association |
+| Find Character | 10 | LINQ query returns correct results |
+| Code Quality | 10 | Clean, readable, well-organized |
+| **Total** | **100** | |
+| **Stretch: Level Up** | **+10** | Update character level functionality |
+
+---
+
+## How This Connects to the Final Project
+
+- `GameContext` is the foundation for all database operations
+- The Room and Character entities expand into the full game world
+- LINQ queries become more complex with related entities
+- This pattern (DbContext + entities + LINQ) is used throughout the final project
+
+---
+
+## Tips
+
+- Use SQL Server Object Explorer in Visual Studio to view your database
+- `SaveChanges()` must be called to persist data
+- Use `Find()` for primary key lookups, `FirstOrDefault()` for other queries
+- Check migration files in the `Migrations` folder to see what SQL will run
+
+---
+
+## Submission
+
+1. Commit your changes with a meaningful message
+2. Push to your GitHub Classroom repository
+3. Submit the repository URL in Canvas
 
 ---
 
 ## Resources
 
-- [LINQ Documentation](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/concepts/linq/)
-- [Abstract Classes](https://docs.microsoft.com/en-us/dotnet/csharp/programming-guide/classes-and-structs/abstract-and-sealed-classes-and-class-members)
-- [Working with JSON](https://learn.microsoft.com/en-us/dotnet/standard/serialization/system-text-json-overview)
+- [EF Core Getting Started](https://learn.microsoft.com/en-us/ef/core/get-started/overview/first-app)
+- [EF Core DbContext](https://learn.microsoft.com/en-us/ef/core/dbcontext-configuration/)
+- [EF Core Migrations](https://learn.microsoft.com/en-us/ef/core/managing-schemas/migrations/)
+- [Connection Strings](https://www.connectionstrings.com/sql-server/)
 
 ---
 
-## Questions?
+## Need Help?
 
-- Post in Canvas discussion board
+- Post questions in the Canvas discussion board
 - Attend office hours
-- Ask during class
-
-Good luck with your preparation!
+- Review the in-class repository for additional examples

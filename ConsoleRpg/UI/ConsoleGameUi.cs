@@ -14,10 +14,10 @@ public class ConsoleGameUi : IGameUi
     public void DisplayWelcome()
     {
         Console.Clear();
-        Console.WriteLine("╔══════════════════════════════════════╗");
-        Console.WriteLine("║        W7 Console RPG                ║");
-        Console.WriteLine("║   Midterm Prep — SOLID Architecture  ║");
-        Console.WriteLine("╚══════════════════════════════════════╝");
+        Console.WriteLine("╔══════════════════════════════════════════╗");
+        Console.WriteLine("║          W9 Console RPG                  ║");
+        Console.WriteLine("║   EF Core Intro — SOLID Architecture     ║");
+        Console.WriteLine("╚══════════════════════════════════════════╝");
         Console.WriteLine();
     }
 
@@ -29,6 +29,13 @@ public class ConsoleGameUi : IGameUi
         Console.WriteLine("3. Reset Battle");
         Console.WriteLine("4. Character Manager (W6)");
         Console.WriteLine("5. W6 GameEngine Demo");
+        Console.WriteLine("--- W9: EF Core ---");
+        Console.WriteLine("6. Display Characters");
+        Console.WriteLine("7. Find Character");
+        Console.WriteLine("8. Add Character");
+        Console.WriteLine("9. Add Room");
+        Console.WriteLine("10. Level Up Character");
+        Console.WriteLine("11. Display Rooms");
         Console.WriteLine("0. Exit");
         Console.Write("\nEnter choice: ");
         return Console.ReadLine() ?? string.Empty;

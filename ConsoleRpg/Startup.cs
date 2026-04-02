@@ -12,8 +12,12 @@ namespace ConsoleRpg;
 /// Composition root — the only place in the solution that calls 'new' on concrete types.
 /// All services are wired here and injected as abstractions into GameEngine and other consumers.
 ///
-/// DIP in action: Nothing downstream of this class knows about GameContext, PlayerDao,
-/// BattleService, or any other concretion. Every consumer depends on an interface.
+/// DIP in action: Nothing downstream of this class knows about FileContext, GameContext,
+/// PlayerDao, BattleService, or any other concretion. Every consumer depends on an interface.
+///
+/// W9: Two IContext implementations coexist:
+///   FileContext (JSON-backed) — powers W7 combat features
+///   GameContext (EF Core DbContext) — powers W9 database CRUD features
 ///
 /// Program.cs calls Startup.Initialize() then hands off to GameEngine and other services.
 /// </summary>
@@ -37,9 +41,11 @@ public static class Startup
         // Configuration — file paths come from appsettings.json, not hardcoded strings
         var config = ConfigurationHelper.LoadDataFileConfig();
 
-        // Data layer — GameContext is the only class that touches JSON files directly
-        var context = new GameContext(config.Players, config.Monsters, config.Items);
-        context.Read();
+        // Data layer — FileContext is the only class that touches JSON files directly
+        // W9: Renamed from GameContext to make room for the EF Core GameContext (DbContext)
+        var fileContext = new FileContext(config.Players, config.Monsters, config.Items);
+        fileContext.Read();
+        IContext context = fileContext;
 
         // DAO layer — each DAO depends on IContext, never on GameContext
         IEntityDao<Player> playerDao = new PlayerDao(context);
@@ -52,8 +58,12 @@ public static class Startup
         IBattleService battleService = new BattleService();
         GameUi = new ConsoleGameUi();
 
-        // W7 GameEngine — all dependencies are abstractions
-        GameEngine = new GameEngine(context, playerService, battleService, GameUi);
+        // W9: EF Core database context — manages SQL Server connection
+        // Both fileContext and dbContext implement IContext — GameEngine sees only the abstraction
+        IContext dbContext = new GameContext();
+
+        // W9 GameEngine — both file and database contexts injected as IContext abstractions
+        GameEngine = new GameEngine(context, playerService, battleService, GameUi, dbContext);
 
         // W6 Demo and Character Manager — wired separately, accessible via menu
         _fileHandler = new CsvFileHandler("Input/input.csv");

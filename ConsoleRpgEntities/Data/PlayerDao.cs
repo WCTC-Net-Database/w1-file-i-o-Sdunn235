@@ -29,7 +29,7 @@ public class PlayerDao : IEntityDao<Player>
             p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
     public void Add(Player entity) =>
-        _context.Players.Add(entity);
+        _context.AddEntity(entity);
 
     public void Update(Player entity)
     {
@@ -49,6 +49,6 @@ public class PlayerDao : IEntityDao<Player>
     {
         var entity = GetById(id);
         if (entity != null)
-            _context.Players.Remove(entity);
+            _context.RemoveEntity(entity);
     }
 }

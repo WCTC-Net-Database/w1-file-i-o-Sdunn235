@@ -4,27 +4,33 @@ namespace ConsoleRpgEntities.Data;
 
 /// <summary>
 /// The DIP anchor for all data access in ConsoleRpg.
-/// ConsoleRpg depends on this abstraction — never on GameContext directly.
+/// ConsoleRpg depends on this abstraction — never on any concrete context directly.
 ///
-/// Week 4: IFileHandler worked with one entity type (Characters).
-/// Week 7: IContext works with multiple entity types (Players, Monsters, Items).
-/// Week 9: IContext becomes DbContext with real database support.
+/// Week 4:  IFileHandler worked with one entity type (Characters).
+/// Week 7:  IContext works with multiple entity types via in-memory lists.
+/// Week 9:  IContext evolves — both FileContext (JSON) and GameContext (EF Core DbContext)
+///          satisfy this contract. Business logic never knows which back-end is in use.
 ///
-/// SaveChanges() mimics database behavior: make changes in memory, then
-/// commit them all at once — rather than writing to disk on every operation.
+/// Collections are IEnumerable — the common ground between List&lt;T&gt; and DbSet&lt;T&gt;.
+/// Mutations go through AddEntity/RemoveEntity so each context can handle them its own way.
 /// </summary>
 public interface IContext
 {
-    List<Player> Players { get; }
-    List<MonsterBase> Monsters { get; }
-    List<Item> Items { get; }
+    // Existing entity collections
+    IEnumerable<Player> Players { get; }
+    IEnumerable<MonsterBase> Monsters { get; }
+    IEnumerable<Item> Items { get; }
 
-    /// <summary>Loads all entities from their data source into memory.</summary>
-    void Read();
+    // W9: New entity collections for EF Core
+    IEnumerable<Room> Rooms { get; }
+    IEnumerable<Character> Characters { get; }
 
-    /// <summary>Stages an entity to be added to the appropriate in-memory list.</summary>
-    void Write(object entity);
+    /// <summary>Adds an entity to the context. FileContext dispatches by type; DbContext tracks it.</summary>
+    void AddEntity<T>(T entity) where T : class;
 
-    /// <summary>Persists all staged in-memory changes back to the data source.</summary>
+    /// <summary>Removes an entity from the context.</summary>
+    void RemoveEntity<T>(T entity) where T : class;
+
+    /// <summary>Persists all staged changes to the data source (JSON file or database).</summary>
     void SaveChanges();
 }
