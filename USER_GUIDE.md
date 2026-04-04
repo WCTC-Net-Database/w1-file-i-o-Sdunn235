@@ -7,13 +7,12 @@ How to build, run, and use the application.
 ## Prerequisites
 
 - **.NET 10 SDK** (or later)
-- **SQL Server LocalDB** (ships with Visual Studio)
+- **Network access to WCTC SQL Server** (`bitsql.wctc.edu`)
 
-Verify both are installed:
+Verify .NET is installed:
 
 ```bash
 dotnet --version
-sqllocaldb info
 ```
 
 ---
@@ -38,25 +37,19 @@ dotnet run --project ConsoleRpg --no-launch-profile
 
 ## Database Setup
 
-The app uses SQL Server LocalDB. The connection string is hardcoded in `GameContext.cs`:
+The app connects to the WCTC school SQL Server. The connection string is hardcoded in `GameContext.cs`:
 
 ```
-Server=(localdb)\mssqllocaldb;Database=ConsoleRPG;Trusted_Connection=True;
+Server=bitsql.wctc.edu;Database=w9_efcore_SDunn;User Id=sdunn15;Password=000599650;TrustServerCertificate=True;
 ```
+
+**Lazy loading** is enabled via `UseLazyLoadingProxies()` — navigation properties (marked `virtual`) load automatically on first access without explicit `Include()` calls.
 
 **First run:** EF Core migrations create the database automatically. If you need to manually apply migrations:
 
 ```bash
 dotnet ef database update --project ConsoleRpgEntities --startup-project ConsoleRpg
 ```
-
-**Verify the database exists:**
-
-```bash
-sqllocaldb info mssqllocaldb
-```
-
-Or open SQL Server Object Explorer in Visual Studio and look for `ConsoleRPG` under `(localdb)\mssqllocaldb`.
 
 ---
 
@@ -95,7 +88,7 @@ On launch you'll see the main menu. Options 1-5 are W7 features (JSON-backed). O
 
 | Option | What It Does |
 |--------|-------------|
-| **6. Display Characters** | Lists all characters from the database with their level and room assignment. Uses `Include()` for eager loading. |
+| **6. Display Characters** | Lists all characters from the database with their level and room assignment. Room loads via lazy loading proxy. |
 | **7. Find Character** | Searches for a character by name (partial match). Uses LINQ `FirstOrDefault` with `Contains`. |
 | **8. Add Character** | Creates a new character and associates it with an existing room. Prompts for name, level, and room ID. |
 | **9. Add Room** | Creates a new room. Prompts for name and description. |

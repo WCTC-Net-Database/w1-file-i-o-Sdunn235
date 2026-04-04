@@ -3,7 +3,6 @@ using ConsoleRpg.Services.Commands;
 using ConsoleRpg.UI;
 using ConsoleRpgEntities.Data;
 using ConsoleRpgEntities.Models;
-using Microsoft.EntityFrameworkCore;
 // Alias to resolve W6 Character (abstract class) vs W9 Character (EF entity) namespace collision
 using EfCharacter = ConsoleRpgEntities.Models.Character;
 
@@ -289,20 +288,14 @@ public class GameEngine
 
     /// <summary>
     /// Displays all characters in the database with their room assignments.
-    /// Uses EF Core Include() for eager loading of the Room navigation property.
-    /// LINQ: ToList() materializes the query, Include() joins related data.
+    /// Lazy loading proxies handle Room navigation — no explicit Include() needed.
+    /// LINQ: ToList() materializes the query; Room loads automatically on first access.
     /// </summary>
     public void DisplayCharacters()
     {
         if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
 
-        // Cast to IQueryable for Include() support — IEnumerable alone can't do eager loading.
-        // This is safe because the EF Core GameContext backs Characters with a DbSet.
-        var characters = _dbContext.Characters
-            .AsQueryable()
-            .Cast<EfCharacter>()
-            .Include(c => c.Room)
-            .ToList();
+        var characters = _dbContext.Characters.OfType<EfCharacter>().ToList();
 
         if (!characters.Any())
         {

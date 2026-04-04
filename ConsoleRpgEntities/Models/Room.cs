@@ -13,6 +13,6 @@ public class Room
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 
-    /// <summary>Navigation collection — all characters currently in this room.</summary>
-    public ICollection<Character> Characters { get; set; } = new List<Character>();
+    /// <summary>Navigation collection — all characters currently in this room (virtual for lazy loading).</summary>
+    public virtual ICollection<Character> Characters { get; set; } = new List<Character>();
 }

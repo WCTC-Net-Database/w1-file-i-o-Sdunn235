@@ -20,6 +20,6 @@ public class Character
     /// <summary>Foreign key to the Room this character belongs to.</summary>
     public int RoomId { get; set; }
 
-    /// <summary>Navigation property — the room this character is in.</summary>
-    public Room Room { get; set; } = null!;
+    /// <summary>Navigation property — the room this character is in (virtual for lazy loading).</summary>
+    public virtual Room Room { get; set; } = null!;
 }

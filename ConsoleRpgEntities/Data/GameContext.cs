@@ -59,12 +59,16 @@ public class GameContext : DbContext, IContext
     }
 
     /// <summary>
-    /// Configures the SQL Server connection.
-    /// Uses LocalDB — the lightweight SQL Server instance that ships with Visual Studio.
+    /// Configures the SQL Server connection and enables lazy loading proxies.
+    /// Connects to the WCTC school SQL Server at bitsql.wctc.edu.
+    /// Lazy loading proxies allow navigation properties (marked virtual) to load
+    /// automatically on first access — no explicit Include() calls needed.
     /// </summary>
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseSqlServer(
-            "Server=(localdb)\\mssqllocaldb;Database=ConsoleRPG;Trusted_Connection=True;");
+        optionsBuilder
+            .UseLazyLoadingProxies()
+            .UseSqlServer(
+                "Server=bitsql.wctc.edu;Database=w9_efcore_SDunn;User Id=sdunn15;Password=000599650;TrustServerCertificate=True;");
     }
 }

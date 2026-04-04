@@ -178,7 +178,7 @@ Room (1) ───── (*) Character
                      Room (navigation)
 ```
 
-EF Core configures this relationship by convention — `RoomId` is the foreign key, `Room` is the navigation property. `Include(c => c.Room)` in `DisplayCharacters()` does eager loading to avoid lazy-loading pitfalls.
+EF Core configures this relationship by convention — `RoomId` is the foreign key, `Room` is the navigation property. Navigation properties are marked `virtual` so that EF Core's lazy loading proxies can load related data automatically on first access — no explicit `Include()` calls needed.
 
 ---
 
@@ -263,7 +263,7 @@ void IContext.SaveChanges()
 
 ### Why IEnumerable instead of IQueryable?
 
-`IQueryable` would leak EF Core details into business logic (expression trees, deferred SQL execution). `IEnumerable` keeps the abstraction clean. Where EF-specific features are needed (like `Include()`), GameEngine casts locally — the leak is contained to one method, not the interface.
+`IQueryable` would leak EF Core details into business logic (expression trees, deferred SQL execution). `IEnumerable` keeps the abstraction clean. With lazy loading proxies enabled, navigation properties load on first access — no `Include()` calls needed, keeping GameEngine free of EF-specific details.
 
 ### Why a using alias instead of renaming?
 
