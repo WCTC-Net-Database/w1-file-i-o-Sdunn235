@@ -307,6 +307,16 @@ public class GameEngine
         foreach (var c in characters)
         {
             Console.WriteLine($"  [{c.Id}] {c.Name} (Level {c.Level}) — Room: {c.Room?.Name ?? "None"}");
+
+            // Stretch goal: display and execute abilities if the character has any
+            if (c.Abilities.Any())
+            {
+                foreach (var ability in c.Abilities)
+                {
+                    Console.WriteLine($"        Ability: {ability.Name} — {ability.Description}");
+                }
+                c.ExecuteAbility(c.Abilities.First());
+            }
         }
     }
 
@@ -372,17 +382,17 @@ public class GameEngine
             return;
         }
 
-        var character = new EfCharacter
+        var player = new Player
         {
             Name = name,
             Level = level,
             RoomId = roomId
         };
 
-        _dbContext.AddEntity(character);
+        _dbContext.AddEntity(player);
         _dbContext.SaveChanges();
 
-        Console.WriteLine($"\nCharacter '{name}' added to {room.Name}.");
+        Console.WriteLine($"\nPlayer '{name}' added to {room.Name}.");
     }
 
     /// <summary>

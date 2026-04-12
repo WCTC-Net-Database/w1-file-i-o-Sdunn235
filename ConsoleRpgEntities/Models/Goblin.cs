@@ -1,15 +1,10 @@
 namespace ConsoleRpgEntities.Models;
 
 /// <summary>
-/// Goblin monster — weak individually but dangerous in numbers.
-/// Loaded from monsters.json via the "$type": "goblin" discriminator.
-/// Inherits all base stats from MonsterBase.
+/// Goblin character — inherits from Character for TPH storage.
+/// Sneakiness is a Goblin-specific column in the Characters table (NULL for non-Goblin rows).
 /// </summary>
-public class Goblin : MonsterBase
+public class Goblin : Character
 {
-    /// <summary>Goblin shrieks to summon reinforcements.</summary>
-    public override void PerformSpecialAction()
-    {
-        Console.WriteLine($"{Name} lets out a shrill shriek, rallying nearby goblins!");
-    }
+    public int Sneakiness { get; set; }
 }

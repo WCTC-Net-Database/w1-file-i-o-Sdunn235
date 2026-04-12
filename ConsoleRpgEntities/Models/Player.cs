@@ -1,24 +1,22 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace ConsoleRpgEntities.Models;
 
 /// <summary>
-/// Represents a player entity loaded from players.json.
-/// Carries a list of Items used in LINQ combat calculations in BattleService:
-///
-///   int attackBonus = player.Items
-///       .Where(item => item.IsEquipped &amp;&amp; item.Type == "Weapon")
-///       .Sum(item => item.AttackBonus);
-///
-/// DIP: ConsoleRpg depends on this model through IContext — never loads JSON directly.
+/// Player character — inherits from Character for TPH storage.
+/// Hp and MaxHp are Player-specific columns in the Characters table (NULL for non-Player rows).
+/// Legacy JSON properties are [NotMapped] so EF ignores them while FileContext/combat still works.
 /// </summary>
-public class Player
+public class Player : Character
 {
-    public int Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public string CharacterClass { get; set; } = string.Empty;
-    public int Level { get; set; }
     public int Hp { get; set; }
     public int MaxHp { get; set; }
+
+    [NotMapped]
+    public string CharacterClass { get; set; } = string.Empty;
+    [NotMapped]
     public AbilityScores AbilityScores { get; set; } = new();
+    [NotMapped]
     public List<Item> Items { get; set; } = new();
 
     public override string ToString() =>

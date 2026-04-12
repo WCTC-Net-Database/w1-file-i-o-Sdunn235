@@ -15,7 +15,6 @@ namespace ConsoleRpgEntities.Models;
 ///   4. GameContext will load it automatically — no other changes needed (OCP)
 /// </summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(Goblin), "goblin")]
 [JsonDerivedType(typeof(Dragon), "dragon")]
 public abstract class MonsterBase : IMonster
 {

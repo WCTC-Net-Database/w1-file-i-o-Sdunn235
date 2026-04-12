@@ -1,25 +1,30 @@
+using ConsoleRpgEntities.Models.Abilities;
+
 namespace ConsoleRpgEntities.Models;
 
 /// <summary>
-/// Represents a character entity managed by EF Core.
-/// W9: Stored in SQL Server via GameContext (DbContext).
-///
-/// Note: This is ConsoleRpgEntities.Models.Character — a simple EF Core entity.
-/// It is NOT the same as ConsoleRpg.Models.Characters.Character (the W6 abstract class).
-/// Different namespaces, different purposes, no collision.
-///
-/// RoomId is a foreign key — EF Core enforces referential integrity automatically.
-/// The Room navigation property enables eager loading with Include().
+/// Abstract base class for all characters stored in the database via TPH.
+/// Player and Goblin inherit from this — EF Core uses a Discriminator column
+/// to distinguish between them in the shared Characters table.
 /// </summary>
-public class Character
+public abstract class Character
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public int Level { get; set; }
 
-    /// <summary>Foreign key to the Room this character belongs to.</summary>
     public int RoomId { get; set; }
-
-    /// <summary>Navigation property — the room this character is in (virtual for lazy loading).</summary>
     public virtual Room Room { get; set; } = null!;
+
+    /// <summary>Many-to-many: a character can have multiple abilities.</summary>
+    public virtual ICollection<Ability> Abilities { get; set; } = new List<Ability>();
+
+    /// <summary>
+    /// Stretch goal: executes an ability during combat.
+    /// Virtual so subclasses can override with type-specific behavior.
+    /// </summary>
+    public virtual void ExecuteAbility(Ability ability)
+    {
+        Console.WriteLine($"{Name} uses {ability.Name}!");
+    }
 }
