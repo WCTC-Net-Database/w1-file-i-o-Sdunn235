@@ -13,10 +13,17 @@ public static class ConfigurationHelper
 {
     public static DataFileConfig LoadDataFileConfig(string path = "appsettings.json")
     {
-        if (!File.Exists(path))
-            throw new FileNotFoundException($"Configuration file not found: {path}");
+        // Resolve relative paths against the build output directory, not the
+        // current working directory. This makes the app work whether launched
+        // from the solution root, the ConsoleRpg/ folder, or via an IDE.
+        var resolvedPath = Path.IsPathRooted(path)
+            ? path
+            : Path.Combine(AppContext.BaseDirectory, path);
 
-        var root = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path))
+        if (!File.Exists(resolvedPath))
+            throw new FileNotFoundException($"Configuration file not found: {resolvedPath}");
+
+        var root = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(resolvedPath))
             ?? throw new InvalidOperationException("Failed to deserialize appsettings.json.");
 
         return root.DataFiles;

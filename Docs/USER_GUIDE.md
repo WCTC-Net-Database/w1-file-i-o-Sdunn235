@@ -37,11 +37,14 @@ dotnet run --project ConsoleRpg --no-launch-profile
 
 ## Database Setup
 
-The app connects to the WCTC school SQL Server. The connection string is hardcoded in `GameContext.cs`:
+The app connects to the WCTC school SQL Server at `bitsql.wctc.edu`, database `w9_efcore_SDunn` (shared across all Net Frameworks modules).
 
-```
-Server=bitsql.wctc.edu;Database=w9_efcore_SDunn;User Id=sdunn15;Password=000599650;TrustServerCertificate=True;
-```
+**Connection string is loaded from config files**, not hardcoded:
+
+1. `ConsoleRpg/appsettings.json` — committed placeholder (safe, no real credentials)
+2. `ConsoleRpg/appsettings.Development.json` — real credentials, **gitignored**, created locally
+
+`GameContext.OnConfiguring` reads `appsettings.json` then overlays `appsettings.Development.json` via `ConfigurationBuilder`. To run the app for the first time on a new machine, copy `appsettings.json`, rename to `appsettings.Development.json`, and replace the placeholder password with your real SQL credential.
 
 **Lazy loading** is enabled via `UseLazyLoadingProxies()` — navigation properties (marked `virtual`) load automatically on first access without explicit `Include()` calls.
 

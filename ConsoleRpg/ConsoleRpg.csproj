@@ -17,8 +17,11 @@
     <None Update="Input\input.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <!-- Copy appsettings to output -->
+    <!-- Copy appsettings to output. Development file holds real credentials and is gitignored. -->
     <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="appsettings.Development.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <!-- Copy ConsoleRpgEntities JSON data files to output -->

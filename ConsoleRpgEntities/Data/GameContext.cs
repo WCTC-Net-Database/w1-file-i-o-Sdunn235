@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using ConsoleRpgEntities.Models;
 
 namespace ConsoleRpgEntities.Data;
@@ -61,14 +62,30 @@ public class GameContext : DbContext, IContext
     /// <summary>
     /// Configures the SQL Server connection and enables lazy loading proxies.
     /// Connects to the WCTC school SQL Server at bitsql.wctc.edu.
+    ///
+    /// Connection string is loaded from appsettings.json, then overridden by
+    /// appsettings.Development.json if present. The Development file holds the
+    /// real password and is gitignored — appsettings.json contains only a
+    /// placeholder that is safe to commit.
+    ///
     /// Lazy loading proxies allow navigation properties (marked virtual) to load
     /// automatically on first access — no explicit Include() calls needed.
     /// </summary>
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(AppContext.BaseDirectory)
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+            .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: false)
+            .Build();
+
+        var connectionString = configuration.GetConnectionString("GameDb")
+            ?? throw new InvalidOperationException(
+                "Connection string 'GameDb' not found. Ensure appsettings.json is present " +
+                "and (for real credentials) appsettings.Development.json exists in the output directory.");
+
         optionsBuilder
             .UseLazyLoadingProxies()
-            .UseSqlServer(
-                "Server=bitsql.wctc.edu;Database=w9_efcore_SDunn;User Id=sdunn15;Password=000599650;TrustServerCertificate=True;");
+            .UseSqlServer(connectionString);
     }
 }
