@@ -1,15 +1,17 @@
 using ConsoleRpgEntities.Models.Enums;
 
-namespace ConsoleRpgEntities.Models.Abilities;
+namespace ConsoleRpgEntities.Models.Magic;
 
-public class Ability
+public class Magic
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int Power { get; set; }
-    public int StaminaCost { get; set; }
-    public AbilityKind Kind { get; set; }
+    public int BpCost { get; set; }
+    public int BytePoolCost { get; set; }
+    public Element Element { get; set; }
+    public MagicKind Kind { get; set; }
     public CoreAttribute PrimaryStat { get; set; }
 
     public virtual ICollection<Character> Characters { get; set; } = new List<Character>();

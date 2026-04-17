@@ -1,5 +1,5 @@
 namespace ConsoleRpgEntities.Models;
 
-public class Player : Character
+public class Animal : Character
 {
 }

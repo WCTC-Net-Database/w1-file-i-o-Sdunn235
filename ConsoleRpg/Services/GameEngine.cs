@@ -1,301 +1,30 @@
-using ConsoleRpg.Interfaces;
-using ConsoleRpg.Services.Commands;
 using ConsoleRpg.UI;
 using ConsoleRpgEntities.Data;
 using ConsoleRpgEntities.Models;
-// Alias to resolve W6 Character (abstract class) vs W9 Character (EF entity) namespace collision
-using EfCharacter = ConsoleRpgEntities.Models.Character;
+using ConsoleRpgEntities.Models.Enums;
+using ConsoleRpgEntities.Models.Items;
+using ConsoleRpgEntities.Models.Races;
 
 namespace ConsoleRpg.Services;
 
-/// <summary>
-/// Runs the game loop and processes entities.
-///
-/// Three constructors support three contexts:
-///   W6 constructor: (IFileHandler, List&lt;IEntity&gt;) — powers RunTurn() and the entity demo.
-///   W7 constructor: (IContext, IPlayerService, IBattleService, IGameUi) — powers RunCombat().
-///   W9 constructor: Extends W7 with a second IContext for EF Core database operations.
-///
-/// DIP: All constructors depend only on abstractions — no concrete types anywhere.
-/// </summary>
 public class GameEngine
 {
-    // W6 fields
-    private readonly List<IEntity> _entities;
-    private readonly IFileHandler _fileHandler;
+    private readonly IContext _dbContext;
+    private readonly IGameUi _gameUi;
 
-    // W7 fields
-    private readonly IContext? _context;
-    private readonly IPlayerService? _playerService;
-    private readonly IBattleService? _battleService;
-    private readonly IGameUi? _gameUi;
-
-    // W9 field — EF Core database context (accessed through IContext abstraction)
-    private readonly IContext? _dbContext;
-
-    /// <summary>
-    /// W6 Constructor: used by GameEngineDemo for the entity-turn demonstration.
-    /// DIP in action: GameEngine never creates its own CsvFileHandler or concrete entity.
-    /// </summary>
-    public GameEngine(IFileHandler fileHandler, List<IEntity> entities)
+    public GameEngine(IContext dbContext, IGameUi gameUi)
     {
-        _fileHandler = fileHandler;
-        _entities = entities;
-    }
-
-    /// <summary>
-    /// W7 Constructor: used when only file-based context is needed (no EF Core).
-    /// All four parameters are abstractions — Startup decides which concretions to inject.
-    /// </summary>
-    public GameEngine(IContext context, IPlayerService playerService,
-                      IBattleService battleService, IGameUi gameUi)
-        : this(context, playerService, battleService, gameUi, dbContext: null)
-    {
-    }
-
-    /// <summary>
-    /// W9 Constructor: full game engine with both file-based and EF Core contexts.
-    /// fileContext powers W7 combat features (JSON-backed).
-    /// dbContext powers W9 CRUD features (SQL Server-backed).
-    /// Both are IContext — business logic never knows which back-end is in use.
-    /// </summary>
-    public GameEngine(IContext fileContext, IPlayerService playerService,
-                      IBattleService battleService, IGameUi gameUi,
-                      IContext? dbContext)
-    {
-        _context = fileContext;
-        _playerService = playerService;
-        _battleService = battleService;
-        _gameUi = gameUi;
         _dbContext = dbContext;
-        _entities = new List<IEntity>();
-        _fileHandler = null!;
-    }
-
-    /// <summary>
-    /// Uses the injected IFileHandler to read and display all characters from the data source.
-    /// DIP demo: GameEngine calls _fileHandler.ReadAll() on an abstraction �
-    /// it has no idea whether the source is CSV, JSON, or anything else.
-    /// </summary>
-    public void DisplayLoadedCharacters()
-    {
-        Console.WriteLine("\n=== Characters Loaded via IFileHandler (DIP) ===\n");
-
-        var characters = _fileHandler.ReadAll();
-
-        if (characters.Count == 0)
-        {
-            Console.WriteLine("No characters found in the data source.");
-            return;
-        }
-
-        foreach (var character in characters)
-        {
-            Console.WriteLine($"  {character}");
-        }
-
-        Console.WriteLine();
-    }
-
-    /// <summary>
-    /// Processes all entities for one game turn.
-    /// Every entity attacks; optional abilities are checked with 'is' before use.
-    /// </summary>
-    public void RunTurn()
-    {
-        Console.WriteLine("\n=== Game Engine: Processing Entities ===\n");
-
-        foreach (IEntity entity in _entities)
-        {
-            Console.WriteLine($"--- {entity.Name} ---");
-            ProcessEntity(entity);
-            Console.WriteLine();
-        }
-    }
-
-    /// <summary>
-    /// Processes a single entity, calling all abilities it supports.
-    /// Uses the 'is' keyword pattern to check each optional interface.
-    /// </summary>
-    /// <param name="entity">The entity to process.</param>
-    public void ProcessEntity(IEntity entity)
-    {
-        // All entities can attack � safe to call directly
-        entity.Attack();
-
-        // Only call Defend() if the entity implements IDefendable � LSP safe
-        if (entity is IDefendable defendingEntity)
-        {
-            defendingEntity.Defend();
-        }
-
-        // Only call Fly() if the entity implements IFlyable � LSP safe
-        if (entity is IFlyable flyingEntity)
-        {
-            flyingEntity.Fly();
-        }
-
-        // Only call Shoot() if the entity implements IShootable � LSP safe
-        if (entity is IShootable shootingEntity)
-        {
-            shootingEntity.Shoot();
-        }
-
-        // Only call Swim() if the entity implements ISwimmable � LSP safe
-        if (entity is ISwimmable swimmingEntity)
-        {
-            swimmingEntity.Swim();
-        }
-
-        // W6 DIP: Call PerformSpecialAction if the entity is a CharacterBase (abstraction check).
-        // GameEngine depends on the abstraction, not on any concrete type.
-        if (entity is ConsoleRpg.Models.Characters.CharacterBase character)
-        {
-            character.PerformSpecialAction();
-        }
-    }
-
-    /// <summary>
-    /// Stretch Goal: Runs the same turn using the Command Pattern.
-    /// Builds a queue of ICommand objects from the entity list and executes each.
-    /// </summary>
-    public void RunTurnWithCommands()
-    {
-        Console.WriteLine("\n=== Game Engine: Command Queue ===\n");
-
-        var commands = new List<ICommand>();
-
-        foreach (IEntity entity in _entities)
-        {
-            // Every entity gets an attack command
-            commands.Add(new AttackCommand(entity));
-
-            // Optional commands added only when the entity supports the interface
-            if (entity is IDefendable defender)
-                commands.Add(new DefendCommand(defender));
-
-            if (entity is IFlyable flier)
-                commands.Add(new FlyCommand(flier));
-
-            if (entity is IShootable shooter)
-                commands.Add(new ShootCommand(shooter));
-
-            if (entity is ISwimmable swimmer)
-                commands.Add(new SwimCommand(swimmer));
-        }
-
-        // Execute all queued commands
-        foreach (ICommand command in commands)
-        {
-            command.Execute();
-        }
+        _gameUi = gameUi;
     }
 
     // -------------------------------------------------------------------------
-    // W7 Methods � use IContext, IPlayerService, IBattleService, IGameUi
+    // Character CRUD
     // -------------------------------------------------------------------------
 
-    /// <summary>
-    /// Runs one round of combat between the player and the first available monster.
-    /// BattleService handles all LINQ damage calculations � GameEngine only orchestrates.
-    /// AutoSaveDecorator on IPlayerService persists changes automatically after update.
-    /// </summary>
-    public void RunCombat()
-    {
-        if (_context == null || _playerService == null || _battleService == null || _gameUi == null)
-        {
-            Console.WriteLine("GameEngine not initialized for W7 combat.");
-            return;
-        }
-
-        var player = _playerService.GetAllPlayers().FirstOrDefault();
-        if (player == null) { _gameUi.DisplayMessage("No player found. Check players.json."); return; }
-
-        var monsters = _context.Monsters.Where(m => m.Hp > 0).ToList();
-        if (!monsters.Any()) { _gameUi.DisplayMessage("No monsters remain � you've won!"); return; }
-
-        _gameUi.DisplayPlayer(player);
-        _gameUi.DisplayMonsters(monsters);
-
-        var monster = monsters.First();
-        _gameUi.DisplayMessage($"A {monster.Name} steps forward to fight!");
-
-        string result = _battleService.ResolveCombat(player, monster);
-        _gameUi.DisplayCombatResult(result);
-
-        if (monster.Hp <= 0)
-        {
-            monster.PerformSpecialAction();
-            _gameUi.DisplayMessage($"{monster.Name} has been defeated!");
-            _context.RemoveEntity(monster);
-        }
-
-        if (player.Hp <= 0)
-        {
-            _gameUi.DisplayMessage($"{player.Name} has fallen in battle...");
-            if (_gameUi.AskResetBattle())
-                ResetBattle();
-        }
-        else
-        {
-            // AutoSaveDecorator handles SaveChanges � no explicit save call needed here
-            _playerService.UpdatePlayer(player);
-        }
-    }
-
-    /// <summary>
-    /// Resets the battle to its original state.
-    /// Re-reads all data from JSON (restores monsters to full HP) and heals the player to MaxHp.
-    /// Callable from the menu (player choice) or automatically triggered on player death.
-    /// </summary>
-    public void ResetBattle()
-    {
-        if (_context == null || _playerService == null || _gameUi == null) return;
-
-        // Re-read all JSON data — monsters restore to their original HP values
-        // Read() is a FileContext-specific operation (reloads from JSON files).
-        // Safe cast: ResetBattle only applies to the file-backed context.
-        if (_context is FileContext fileContext)
-            fileContext.Read();
-
-        // Heal player back to full
-        var player = _playerService.GetAllPlayers().FirstOrDefault();
-        if (player != null)
-        {
-            player.Hp = player.MaxHp;
-            _playerService.UpdatePlayer(player);
-        }
-
-        _gameUi.DisplayMessage("Battle reset � all monsters restored and player healed to full HP.");
-    }
-
-    /// <summary>
-    /// Displays the current player's stats and equipped items via IGameUi.
-    /// </summary>
-    public void ViewPlayer()
-    {
-        if (_playerService == null || _gameUi == null) return;
-
-        var player = _playerService.GetAllPlayers().FirstOrDefault();
-        if (player == null) { _gameUi.DisplayMessage("No player found."); return; }
-
-        _gameUi.DisplayPlayer(player);
-    }
-
-    // -------------------------------------------------------------------------
-    // W9 Methods — use _dbContext (EF Core IContext) for database CRUD
-    // -------------------------------------------------------------------------
-
-    /// <summary>
-    /// Displays all characters in the database with their room assignments.
-    /// Lazy loading proxies handle Room navigation — no explicit Include() needed.
-    /// LINQ: ToList() materializes the query; Room loads automatically on first access.
-    /// </summary>
     public void DisplayCharacters()
     {
-        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
-
-        var characters = _dbContext.Characters.OfType<EfCharacter>().ToList();
+        var characters = _dbContext.Characters.ToList();
 
         if (!characters.Any())
         {
@@ -303,163 +32,138 @@ public class GameEngine
             return;
         }
 
-        Console.WriteLine("\n=== Characters (EF Core — SQL Server) ===\n");
+        Console.WriteLine("\n=== Characters ===\n");
         foreach (var c in characters)
         {
-            Console.WriteLine($"  [{c.Id}] {c.Name} (Level {c.Level}) — Room: {c.Room?.Name ?? "None"}");
-
-            // Stretch goal: display and execute abilities if the character has any
-            if (c.Abilities.Any())
-            {
-                foreach (var ability in c.Abilities)
-                {
-                    Console.WriteLine($"        Ability: {ability.Name} — {ability.Description}");
-                }
-                c.ExecuteAbility(c.Abilities.First());
-            }
+            string raceLabel = c.Race?.Name ?? "No Race";
+            string roomLabel = c.Room?.Name ?? "No Room";
+            Console.WriteLine($"  [{c.Id}] {c.Name} (Lv {c.Level}) — {raceLabel} — Room: {roomLabel}");
         }
     }
 
-    /// <summary>
-    /// Searches for a character by name using LINQ.
-    /// Uses FirstOrDefault with a Contains predicate for partial matching.
-    /// </summary>
     public void FindCharacter()
     {
-        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
-
         Console.Write("Enter character name to search: ");
         var name = Console.ReadLine() ?? string.Empty;
 
         var character = _dbContext.Characters
-            .OfType<EfCharacter>()
             .FirstOrDefault(c => c.Name.Contains(name));
 
         if (character != null)
-        {
-            Console.WriteLine($"\nFound: {character.Name} (Level {character.Level})");
-        }
+            Console.WriteLine($"\nFound: [{character.Id}] {character.Name} (Level {character.Level})");
         else
-        {
             Console.WriteLine("\nCharacter not found.");
-        }
     }
 
-    /// <summary>
-    /// Creates a new character and associates it with an existing room.
-    /// Validates that the room exists before creating the character.
-    /// Uses AddEntity + SaveChanges to persist to SQL Server.
-    /// </summary>
     public void AddCharacter()
     {
-        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
-
-        Console.Write("Enter character name: ");
+        Console.Write("Character name: ");
         var name = Console.ReadLine() ?? string.Empty;
 
-        Console.Write("Enter character level: ");
+        Console.Write("Level: ");
         if (!int.TryParse(Console.ReadLine(), out var level))
         {
             Console.WriteLine("Invalid level.");
             return;
         }
 
-        Console.Write("Enter room ID for the character: ");
-        if (!int.TryParse(Console.ReadLine(), out var roomId))
+        Console.Write("Type (1=Player, 2=NPC, 3=Animal): ");
+        var typeChoice = Console.ReadLine()?.Trim();
+
+        // Show available races
+        var races = _dbContext.Races.ToList();
+        if (races.Any())
         {
-            Console.WriteLine("Invalid room ID.");
-            return;
+            Console.WriteLine("\nAvailable Races:");
+            foreach (var r in races)
+                Console.WriteLine($"  [{r.Id}] {r.Name} ({r.GetType().Name})");
         }
 
-        // Validate the room exists before creating the character
-        var room = _dbContext.Rooms
-            .OfType<Room>()
-            .FirstOrDefault(r => r.Id == roomId);
+        Console.Write("Race ID (or blank for none): ");
+        var raceInput = Console.ReadLine()?.Trim();
+        int? raceId = null;
+        Race? selectedRace = null;
 
-        if (room == null)
+        if (!string.IsNullOrEmpty(raceInput) && int.TryParse(raceInput, out var rid))
         {
-            Console.WriteLine("Room not found!");
-            return;
+            selectedRace = races.FirstOrDefault(r => r.Id == rid);
+            if (selectedRace != null)
+                raceId = rid;
         }
 
-        var player = new Player
-        {
-            Name = name,
-            Level = level,
-            RoomId = roomId
-        };
-
-        _dbContext.AddEntity(player);
-        _dbContext.SaveChanges();
-
-        Console.WriteLine($"\nPlayer '{name}' added to {room.Name}.");
-    }
-
-    /// <summary>
-    /// Creates a new room in the database.
-    /// Uses AddEntity + SaveChanges to persist to SQL Server.
-    /// </summary>
-    public void AddRoom()
-    {
-        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
-
-        Console.Write("Enter room name: ");
-        var name = Console.ReadLine() ?? string.Empty;
-
-        Console.Write("Enter room description: ");
-        var description = Console.ReadLine() ?? string.Empty;
-
-        var room = new Room
-        {
-            Name = name,
-            Description = description
-        };
-
-        _dbContext.AddEntity(room);
-        _dbContext.SaveChanges();
-
-        Console.WriteLine($"\nRoom '{name}' added to the game.");
-    }
-
-    /// <summary>
-    /// Displays all rooms in the database with their ID, name, and description.
-    /// Useful as a reference before adding a character (which requires a room ID).
-    /// </summary>
-    public void DisplayRooms()
-    {
-        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
-
+        // Show available rooms
         var rooms = _dbContext.Rooms.ToList();
-
-        if (!rooms.Any())
+        if (rooms.Any())
         {
-            Console.WriteLine("\nNo rooms found in the database.");
-            return;
+            Console.WriteLine("\nAvailable Rooms:");
+            foreach (var r in rooms)
+                Console.WriteLine($"  [{r.Id}] {r.Name}");
         }
 
-        Console.WriteLine("\n=== Rooms (EF Core — SQL Server) ===\n");
-        foreach (var r in rooms)
+        Console.Write("Room ID (or blank for none): ");
+        var roomInput = Console.ReadLine()?.Trim();
+        int? roomId = null;
+        if (!string.IsNullOrEmpty(roomInput) && int.TryParse(roomInput, out var rmId))
         {
-            Console.WriteLine($"  [{r.Id}] {r.Name} — {r.Description}");
+            if (rooms.Any(r => r.Id == rmId))
+                roomId = rmId;
         }
+
+        Character character;
+        switch (typeChoice)
+        {
+            case "1":
+                // Validate PlayableRace for players
+                if (selectedRace != null && selectedRace is not PlayableRace)
+                {
+                    Console.WriteLine("Players can only be assigned a Playable race.");
+                    return;
+                }
+                character = new Player { Name = name, Level = level, RoomId = roomId, RaceId = raceId };
+                break;
+            case "2":
+                character = new Npc { Name = name, Level = level, RoomId = roomId, RaceId = raceId };
+                break;
+            case "3":
+                character = new Animal { Name = name, Level = level, RoomId = roomId, RaceId = raceId };
+                break;
+            default:
+                Console.WriteLine("Invalid type.");
+                return;
+        }
+
+        _dbContext.AddEntity(character);
+        _dbContext.SaveChanges();
+
+        // Create default stats and resources
+        var stats = new Stats
+        {
+            CharacterId = character.Id,
+            Physique = 5, Reflexes = 5, Constitution = 5,
+            Intellect = 5, Intuition = 5, Linguistic = 5, Luck = 5
+        };
+        _dbContext.AddEntity(stats);
+
+        var resources = new Resources
+        {
+            CharacterId = character.Id,
+            Hp = character.DeriveMaxHp(), MaxHp = character.DeriveMaxHp(),
+            Sp = character.DeriveMaxSp(), MaxSp = character.DeriveMaxSp(),
+            Bp = character.DeriveMaxBp(), MaxBp = character.DeriveMaxBp(),
+            BytePool = character.DeriveMaxBytePool(), MaxBytePool = character.DeriveMaxBytePool()
+        };
+        _dbContext.AddEntity(resources);
+        _dbContext.SaveChanges();
+
+        Console.WriteLine($"\n{character.GetType().Name} '{name}' created.");
     }
 
-    /// <summary>
-    /// Stretch Goal: Finds a character by exact name and increments their level.
-    /// Demonstrates EF Core change tracking — modifying the entity in memory
-    /// and calling SaveChanges() generates an UPDATE SQL statement automatically.
-    /// </summary>
     public void LevelUpCharacter()
     {
-        if (_dbContext == null) { Console.WriteLine("EF Core context not initialized."); return; }
-
         Console.Write("Enter character name: ");
         var name = Console.ReadLine() ?? string.Empty;
 
-        var character = _dbContext.Characters
-            .OfType<EfCharacter>()
-            .FirstOrDefault(c => c.Name == name);
-
+        var character = _dbContext.Characters.FirstOrDefault(c => c.Name == name);
         if (character != null)
         {
             character.Level++;
@@ -470,5 +174,379 @@ public class GameEngine
         {
             Console.WriteLine("\nCharacter not found.");
         }
+    }
+
+    public void DisplayCharacterDetail()
+    {
+        Console.Write("Enter character name: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        var character = _dbContext.Characters.FirstOrDefault(c => c.Name.Contains(name));
+        if (character == null)
+        {
+            Console.WriteLine("\nCharacter not found.");
+            return;
+        }
+
+        Console.WriteLine($"\n=== {character.Name} ({character.GetType().Name}) ===");
+        Console.WriteLine($"  Level: {character.Level}");
+        Console.WriteLine($"  Race: {character.Race?.Name ?? "None"}");
+        Console.WriteLine($"  Room: {character.Room?.Name ?? "None"}");
+
+        if (character.Stats != null)
+        {
+            var s = character.Stats;
+            Console.WriteLine($"\n  --- Stats ---");
+            Console.WriteLine($"  Physique:     {s.Physique}");
+            Console.WriteLine($"  Reflexes:     {s.Reflexes}");
+            Console.WriteLine($"  Constitution: {s.Constitution}");
+            Console.WriteLine($"  Intellect:    {s.Intellect}");
+            Console.WriteLine($"  Intuition:    {s.Intuition}");
+            Console.WriteLine($"  Linguistic:   {s.Linguistic}");
+            Console.WriteLine($"  Luck:         {s.Luck}");
+        }
+
+        if (character.Resources != null)
+        {
+            var r = character.Resources;
+            Console.WriteLine($"\n  --- Resources ---");
+            Console.WriteLine($"  HP: {r.Hp}/{r.MaxHp} (derived max: {character.DeriveMaxHp()})");
+            Console.WriteLine($"  SP: {r.Sp}/{r.MaxSp} (derived max: {character.DeriveMaxSp()})");
+            Console.WriteLine($"  BP: {r.Bp}/{r.MaxBp} (derived max: {character.DeriveMaxBp()})");
+            Console.WriteLine($"  BytePool: {r.BytePool}/{r.MaxBytePool} (derived max: {character.DeriveMaxBytePool()})");
+        }
+
+        Console.WriteLine($"\n  Attack: {character.GetTotalAttack()} | Defense: {character.GetTotalDefense()}");
+
+        if (character.Abilities.Any())
+        {
+            Console.WriteLine($"\n  --- Abilities ---");
+            foreach (var a in character.Abilities)
+                Console.WriteLine($"  {a.Name} (Power: {a.Power}, Cost: {a.StaminaCost} SP, Stat: {a.PrimaryStat})");
+        }
+
+        if (character.Magics.Any())
+        {
+            Console.WriteLine($"\n  --- Magic ---");
+            foreach (var m in character.Magics)
+                Console.WriteLine($"  {m.Name} ({m.Element}) Power: {m.Power}, BP: {m.BpCost}, Bytes: {m.BytePoolCost}");
+        }
+
+        if (character.CharacterSkills.Any())
+        {
+            Console.WriteLine($"\n  --- Skills ---");
+            foreach (var cs in character.CharacterSkills)
+                Console.WriteLine($"  {cs.Skill.Name} — Proficiency: {cs.Proficiency} (Primary: {cs.Skill.PrimaryAttribute})");
+        }
+
+        if (character.EquipmentSlots.Any())
+        {
+            Console.WriteLine($"\n  --- Equipment ---");
+            foreach (var slot in character.EquipmentSlots)
+            {
+                string itemLabel = slot.EquippedItem?.Name ?? "(empty)";
+                Console.WriteLine($"  {slot.Slot}: {itemLabel}");
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Room & Navigation
+    // -------------------------------------------------------------------------
+
+    public void DisplayRooms()
+    {
+        var rooms = _dbContext.Rooms.ToList();
+        if (!rooms.Any())
+        {
+            Console.WriteLine("\nNo rooms found.");
+            return;
+        }
+
+        Console.WriteLine("\n=== Rooms ===\n");
+        foreach (var r in rooms)
+        {
+            Console.WriteLine($"  [{r.Id}] {r.Name} — {r.Description}");
+            if (r.Doors.Any())
+            {
+                foreach (var d in r.Doors)
+                    Console.WriteLine($"      {d.Direction} → {d.DestinationRoom.Name}{(d.IsLocked ? " [LOCKED]" : "")}");
+            }
+        }
+    }
+
+    public void AddRoom()
+    {
+        Console.Write("Room name: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        Console.Write("Description: ");
+        var desc = Console.ReadLine() ?? string.Empty;
+
+        var room = new Room { Name = name, Description = desc };
+        _dbContext.AddEntity(room);
+        _dbContext.SaveChanges();
+
+        Console.WriteLine($"\nRoom '{name}' created (ID: {room.Id}).");
+    }
+
+    public void AddDoor()
+    {
+        DisplayRooms();
+
+        Console.Write("Source room ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var sourceId)) { Console.WriteLine("Invalid."); return; }
+
+        Console.Write("Destination room ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var destId)) { Console.WriteLine("Invalid."); return; }
+
+        Console.Write("Direction (North/South/East/West/Up/Down): ");
+        var dirInput = Console.ReadLine() ?? string.Empty;
+        if (!Enum.TryParse<Direction>(dirInput, true, out var direction))
+        {
+            Console.WriteLine("Invalid direction.");
+            return;
+        }
+
+        Console.Write("Door name (e.g., 'Oak Door'): ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        Console.Write("Locked? (y/n): ");
+        bool locked = (Console.ReadLine()?.Trim().ToLower() ?? "") == "y";
+
+        var door = new Door
+        {
+            Name = name,
+            Description = $"A passage leading {direction}",
+            Direction = direction,
+            IsLocked = locked,
+            SourceRoomId = sourceId,
+            DestinationRoomId = destId
+        };
+
+        _dbContext.AddEntity(door);
+        _dbContext.SaveChanges();
+
+        Console.WriteLine($"\nDoor '{name}' connects Room {sourceId} → Room {destId} ({direction}).");
+    }
+
+    public void DisplayCurrentRoom()
+    {
+        var player = _dbContext.Characters.OfType<Player>().FirstOrDefault();
+        if (player == null) { Console.WriteLine("\nNo player found."); return; }
+        if (player.Room == null) { Console.WriteLine($"\n{player.Name} is not in any room."); return; }
+
+        var room = player.Room;
+        Console.WriteLine($"\n=== {room.Name} ===");
+        Console.WriteLine($"  {room.Description}");
+
+        // Characters in the room
+        var others = room.Characters.Where(c => c.Id != player.Id).ToList();
+        if (others.Any())
+        {
+            Console.WriteLine("\n  Characters here:");
+            foreach (var c in others)
+                Console.WriteLine($"    {c.Name} ({c.GetType().Name})");
+        }
+
+        // Exits
+        if (room.Doors.Any())
+        {
+            Console.WriteLine("\n  Exits:");
+            foreach (var d in room.Doors)
+                Console.WriteLine($"    {d.Direction} — {d.Name} → {d.DestinationRoom.Name}{(d.IsLocked ? " [LOCKED]" : "")}");
+        }
+        else
+        {
+            Console.WriteLine("\n  No exits.");
+        }
+    }
+
+    public void MovePlayer()
+    {
+        var player = _dbContext.Characters.OfType<Player>().FirstOrDefault();
+        if (player == null) { Console.WriteLine("\nNo player found."); return; }
+        if (player.Room == null) { Console.WriteLine($"\n{player.Name} is not in any room."); return; }
+
+        DisplayCurrentRoom();
+
+        Console.Write("\nDirection to move: ");
+        var dirInput = Console.ReadLine() ?? string.Empty;
+        if (!Enum.TryParse<Direction>(dirInput, true, out var direction))
+        {
+            Console.WriteLine("Invalid direction.");
+            return;
+        }
+
+        var door = player.Room.Doors.FirstOrDefault(d => d.Direction == direction);
+        if (door == null)
+        {
+            Console.WriteLine($"\nNo exit to the {direction}.");
+            return;
+        }
+
+        if (door.IsLocked)
+        {
+            Console.WriteLine($"\nThe {door.Name} is locked!");
+            return;
+        }
+
+        player.RoomId = door.DestinationRoomId;
+        _dbContext.SaveChanges();
+
+        Console.WriteLine($"\n{player.Name} moves {direction} through the {door.Name}.");
+        DisplayCurrentRoom();
+    }
+
+    // -------------------------------------------------------------------------
+    // Equipment
+    // -------------------------------------------------------------------------
+
+    public void DisplayEquipment()
+    {
+        var player = _dbContext.Characters.OfType<Player>().FirstOrDefault();
+        if (player == null) { Console.WriteLine("\nNo player found."); return; }
+
+        Console.WriteLine($"\n=== {player.Name}'s Equipment ===\n");
+
+        if (!player.EquipmentSlots.Any())
+        {
+            Console.WriteLine("  No equipment slots.");
+            return;
+        }
+
+        foreach (var slot in player.EquipmentSlots)
+        {
+            string itemLabel = slot.EquippedItem?.Name ?? "(empty)";
+            Console.WriteLine($"  {slot.Slot}: {itemLabel}");
+        }
+
+        Console.WriteLine($"\n  Total Attack:  {player.GetTotalAttack()}");
+        Console.WriteLine($"  Total Defense: {player.GetTotalDefense()}");
+    }
+
+    public void EquipItem()
+    {
+        var player = _dbContext.Characters.OfType<Player>().FirstOrDefault();
+        if (player == null) { Console.WriteLine("\nNo player found."); return; }
+
+        // Show available items
+        var items = _dbContext.Items.ToList();
+        if (!items.Any())
+        {
+            Console.WriteLine("\nNo items exist.");
+            return;
+        }
+
+        Console.WriteLine("\n=== Available Items ===\n");
+        foreach (var item in items)
+        {
+            string typeLabel = item switch
+            {
+                Weapon w => $"Weapon (ATK: {w.AttackPower}, {w.WeaponType})",
+                Armor a => $"Armor (DEF: {a.DefenseRating}, {a.WeightClass}, {a.Slot})",
+                Consumable c => $"Consumable ({c.Effect}, Potency: {c.Potency})",
+                _ => item.GetType().Name
+            };
+            Console.WriteLine($"  [{item.Id}] {item.Name} — {typeLabel}");
+        }
+
+        Console.Write("\nItem ID to equip: ");
+        if (!int.TryParse(Console.ReadLine(), out var itemId)) { Console.WriteLine("Invalid."); return; }
+
+        Console.Write("Slot (MainHand/OffHand/Head/Chest/Legs/Feet/Hands): ");
+        var slotInput = Console.ReadLine() ?? string.Empty;
+        if (!Enum.TryParse<SlotType>(slotInput, true, out var slotType))
+        {
+            Console.WriteLine("Invalid slot.");
+            return;
+        }
+
+        // Find or create the slot
+        var slot = player.EquipmentSlots.FirstOrDefault(s => s.Slot == slotType);
+        if (slot == null)
+        {
+            slot = new EquipmentSlot { CharacterId = player.Id, Slot = slotType };
+            _dbContext.AddEntity(slot);
+        }
+
+        slot.EquippedItemId = itemId;
+        _dbContext.SaveChanges();
+
+        var equippedItem = _dbContext.Items.FirstOrDefault(i => i.Id == itemId);
+        Console.WriteLine($"\n{equippedItem?.Name ?? "Item"} equipped to {slotType}.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Items
+    // -------------------------------------------------------------------------
+
+    public void AddItem()
+    {
+        Console.Write("Item type (1=Weapon, 2=Armor, 3=Consumable): ");
+        var typeChoice = Console.ReadLine()?.Trim();
+
+        Console.Write("Name: ");
+        var name = Console.ReadLine() ?? string.Empty;
+
+        Console.Write("Description: ");
+        var desc = Console.ReadLine() ?? string.Empty;
+
+        Console.Write("Value: ");
+        int.TryParse(Console.ReadLine(), out var value);
+
+        Console.Write("Weight: ");
+        int.TryParse(Console.ReadLine(), out var weight);
+
+        Item item;
+        switch (typeChoice)
+        {
+            case "1":
+                Console.Write("Attack Power: ");
+                int.TryParse(Console.ReadLine(), out var atk);
+                Console.Write("Weapon Type (Sword/Axe/Mace/Bow/Staff/Dagger/Spear): ");
+                Enum.TryParse<WeaponType>(Console.ReadLine(), true, out var wpnType);
+                Console.Write("Durability: ");
+                int.TryParse(Console.ReadLine(), out var wDur);
+                item = new Weapon
+                {
+                    Name = name, Description = desc, Value = value, Weight = weight,
+                    AttackPower = atk, WeaponType = wpnType, Durability = wDur
+                };
+                break;
+            case "2":
+                Console.Write("Defense Rating: ");
+                int.TryParse(Console.ReadLine(), out var def);
+                Console.Write("Weight Class (Light/Medium/Heavy): ");
+                Enum.TryParse<ArmorWeight>(Console.ReadLine(), true, out var armorWt);
+                Console.Write("Body Slot (Head/Chest/Legs/Feet/Hands): ");
+                Enum.TryParse<BodySlot>(Console.ReadLine(), true, out var bodySlot);
+                Console.Write("Durability: ");
+                int.TryParse(Console.ReadLine(), out var aDur);
+                item = new Armor
+                {
+                    Name = name, Description = desc, Value = value, Weight = weight,
+                    DefenseRating = def, WeightClass = armorWt, Slot = bodySlot, Durability = aDur
+                };
+                break;
+            case "3":
+                Console.Write("Effect: ");
+                var effect = Console.ReadLine() ?? string.Empty;
+                Console.Write("Potency: ");
+                int.TryParse(Console.ReadLine(), out var potency);
+                item = new Consumable
+                {
+                    Name = name, Description = desc, Value = value, Weight = weight,
+                    Effect = effect, Potency = potency
+                };
+                break;
+            default:
+                Console.WriteLine("Invalid type.");
+                return;
+        }
+
+        _dbContext.AddEntity(item);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"\n{item.GetType().Name} '{name}' created.");
     }
 }
