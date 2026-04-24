@@ -1,5 +1,6 @@
 using ConsoleRpgEntities.Models;
 using ConsoleRpgEntities.Models.Abilities;
+using ConsoleRpgEntities.Models.Containers;
 using ConsoleRpgEntities.Models.Items;
 using ConsoleRpgEntities.Models.Magic;
 using ConsoleRpgEntities.Models.Races;
@@ -18,6 +19,7 @@ public interface IContext
     IEnumerable<Ability> Abilities { get; }
     IEnumerable<Magic> Magics { get; }
     IEnumerable<Item> Items { get; }
+    IEnumerable<Container> Containers { get; }
     IEnumerable<EquipmentSlot> EquipmentSlots { get; }
     IEnumerable<Skill> Skills { get; }
 

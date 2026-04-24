@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using ConsoleRpgEntities.Models;
 using ConsoleRpgEntities.Models.Abilities;
+using ConsoleRpgEntities.Models.Containers;
 using ConsoleRpgEntities.Models.Items;
 using ConsoleRpgEntities.Models.Magic;
 using ConsoleRpgEntities.Models.Races;
@@ -21,6 +22,7 @@ public class GameContext : DbContext, IContext
     public DbSet<Ability> Abilities { get; set; }
     public DbSet<Magic> Magics { get; set; }
     public DbSet<Item> Items { get; set; }
+    public DbSet<Container> Containers { get; set; }
     public DbSet<EquipmentSlot> EquipmentSlots { get; set; }
     public DbSet<Skill> Skills { get; set; }
     public DbSet<CharacterSkill> CharacterSkills { get; set; }
@@ -35,6 +37,7 @@ public class GameContext : DbContext, IContext
     IEnumerable<Ability> IContext.Abilities => Abilities;
     IEnumerable<Magic> IContext.Magics => Magics;
     IEnumerable<Item> IContext.Items => Items;
+    IEnumerable<Container> IContext.Containers => Containers;
     IEnumerable<EquipmentSlot> IContext.EquipmentSlots => EquipmentSlots;
     IEnumerable<Skill> IContext.Skills => Skills;
 
@@ -93,6 +96,40 @@ public class GameContext : DbContext, IContext
             .HasValue<Weapon>("Weapon")
             .HasValue<Armor>("Armor")
             .HasValue<Consumable>("Consumable");
+
+        // --- Container TPH ---
+        modelBuilder.Entity<Container>()
+            .HasDiscriminator<string>("ContainerType")
+            .HasValue<Inventory>("Inventory")
+            .HasValue<Equipment>("Equipment");
+
+        // Container → Items (one-to-many, nullable: items can float)
+        modelBuilder.Entity<Container>()
+            .HasMany(c => c.ItemsCollection)
+            .WithOne(i => i.Container)
+            .HasForeignKey(i => i.ContainerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Character ↔ Inventory (one-to-one, nullable on Character side)
+        modelBuilder.Entity<Inventory>()
+            .HasOne(i => i.Owner)
+            .WithOne(c => c.Inventory)
+            .HasForeignKey<Inventory>(i => i.OwnerCharacterId)
+            .OnDelete(DeleteBehavior.ClientCascade);
+
+        // Character ↔ Equipment (one-to-one, nullable on Character side)
+        modelBuilder.Entity<Equipment>()
+            .HasOne(e => e.Owner)
+            .WithOne(c => c.Equipment)
+            .HasForeignKey<Equipment>(e => e.OwnerCharacterId)
+            .OnDelete(DeleteBehavior.ClientCascade);
+
+        // Equipment → EquipmentSlots (one-to-many; EquipmentContainerId nullable on slot)
+        modelBuilder.Entity<Equipment>()
+            .HasMany(e => e.Slots)
+            .WithOne(s => s.EquipmentContainer)
+            .HasForeignKey(s => s.EquipmentContainerId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // --- Character relationships ---
 

@@ -6,18 +6,26 @@ public class ConsoleGameUi : IGameUi
     {
         Console.Clear();
         Console.WriteLine("╔══════════════════════════════════════════╗");
-        Console.WriteLine("║       W11 Console RPG — LucentForge     ║");
-        Console.WriteLine("║   Equipment & Room Navigation            ║");
+        Console.WriteLine("║       W12 Console RPG — LucentForge     ║");
+        Console.WriteLine("║   Inventory, Containers & Advanced LINQ ║");
         Console.WriteLine("╚══════════════════════════════════════════╝");
         Console.WriteLine();
     }
 
     public string GetMenuChoice()
     {
+        return GetMenuChoice(null);
+    }
+
+    public string GetMenuChoice(string? activeLabel)
+    {
+        if (!string.IsNullOrWhiteSpace(activeLabel))
+            Console.WriteLine($"[Active: {activeLabel}]");
+
         Console.WriteLine("=== Main Menu ===");
         Console.WriteLine("--- Characters ---");
         Console.WriteLine(" 1. Display Characters");
-        Console.WriteLine(" 2. Find Character");
+        Console.WriteLine(" 2. Select Character");
         Console.WriteLine(" 3. Add Character");
         Console.WriteLine(" 4. Level Up Character");
         Console.WriteLine(" 5. Character Detail");
@@ -29,9 +37,10 @@ public class ConsoleGameUi : IGameUi
         Console.WriteLine("10. Move Player");
         Console.WriteLine("--- Equipment ---");
         Console.WriteLine("11. Display Equipment");
-        Console.WriteLine("12. Equip Item");
         Console.WriteLine("--- Items ---");
         Console.WriteLine("13. Add Item");
+        Console.WriteLine("--- Inventory (Player) ---");
+        Console.WriteLine("14. Inventory Management");
         Console.WriteLine(" 0. Exit");
         Console.Write("\nEnter choice: ");
         return Console.ReadLine()?.Trim() ?? string.Empty;

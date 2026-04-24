@@ -1,0 +1,51 @@
+Caelum Session Start
+
+Date: 04/23/2026 @ about 3:45ish
+                                                                                                                                                                                                                                Session Topic:                                                                                                                                                                                             
+
+What I'm working on: Finishing the polishing of w11 and review and prep for w11                                                                                                                                                                                                      
+
+Task: Review the last sessions and go over what was left to complete as well as review the updated README.md for the assignment. The new assignment folder is "C:\Users\Shawn\Documents\Workspace\School\WCTC\2025-2026\Net Frameworks\Module12\w12-efcore-adv" Like usual the solution and projects need to be updated to reflect the new directory name. Remember the templates and codes shown in the README.md are guides and examples, and not a solid we have to do this. I think there is a good chance we have done most the things in w12 or prepared to do. I am also giving you the prompt that you gave me last session we worked on for this session:
+
+**Date:** 2026-04-23 (or whenever you sit down next)
+**What I'm working on:** W11 polish pass — C0016 on `w1-file-i-o-Sdunn235` repo
+**What needs to happen:**
+1. Fix `GetType().Name` returning `"PlayerProxy"` on lazy-loaded entities — use `ObjectContext.GetObjectType()` or `.BaseType?.Name`
+2. Add character list to `DisplayRooms` output (show who's currently in each room)
+3. Rename `Find Character` → `Select Character`; add active-character concept (selected character persists across menu actions until changed)
+4. Clarify Player/NPC/Animal selection UX in `AddCharacter` (pairs with #3)
+5. Seed Race data: Human, Elf, Dwarf (PlayableRace); Goblin, Orc, Troll, Mimic, Slime, Chimera, Kobold (MonsterRace). Decide whether to seed via `HasData()` in `OnModelCreating` (migration-based) or via a `SeedData()` method called from `Startup.Initialize()` (code-based).
+6. Commit as C0016, push to `origin/main`.
+
+**What feels unclear:**
+- Whether Race seeding should be migration-based (cleaner, versioned, but adds a migration for data) or code-based (easier to iterate, but not tied to schema history). I lean migration-based since the Race list is stable.
+- Whether "active character" should be a field on `GameEngine` (in-memory only) or persisted somewhere (e.g., a `LastSelectedCharacterId` in config). In-memory is simpler for a console app; no persistence needed between runs.
+- Deferred from C0015 and **not** in scope for C0016 (still need design conversation): inventory system for Consumables, slot validation (prevent potion-on-feet), help text for Effect/Potency, documenting M:M join tables for the grader. Confirm whether to tackle any of these inline or keep deferred.
+
+**Files I'll touch:**
+- `ConsoleRpg/Services/GameEngine.cs` — `DisplayCharacters`, `DisplayRooms`, `FindCharacter` → `SelectCharacter`, active-character field
+- `ConsoleRpg/Program.cs` + `UI/ConsoleGameUi.cs` — menu label updates
+- `ConsoleRpgEntities/Data/GameContext.cs` — `HasData()` calls for Race seeds (if migration-based)
+- Possibly a new migration: `W11b_RaceSeedData`
+
+**How to start:** Load Caelum context (identity, active_context, wctc_school_master). Then open `.claude/plans/` and read the W11 plan and execution plan for background. Confirm the six items above are still the right priority before writing code.
+
+
+Framework:
+C:\Users\Shawn\Documents\Workspace\Caelum\Caelum_Framework_Shawn_2026-03-12_Workflow_Expansion
+
+Canonical Session Log Location:
+C:\Users\Shawn\Documents\Workspace\Caelum\Caelum_Framework_Shawn_2026-03-12_Workflow_Expansion\sessions\
+
+Read my session state first:
+"C:\Users\Shawn\Documents\Workspace\Caelum\Caelum_Framework_Shawn_2026-03-12_Workflow_Expansion\sessions\2026-04-17_1500_w11_execution_commit.md" & “C:\Users\Shawn\Documents\Workspace\Caelum\Caelum_Framework_Shawn_2026-03-12_Workflow_Expansion\sessions\2026-04-17_1600_bible_pushback_reflection.md”
+
+
+And the master doc:
+C:\Users\Shawn\Documents\Workspace\School\WCTC\2025-2026\Net Frameworks\Module11\w11-efcore-equipment\Docs"
+
+If you look at the how the projects work each week for the Net Frameworks class that these documents location will update each week when I make the next module
+
+1 help orient me
+2 choose or adapt the right workflow
+3 produce a execution plan

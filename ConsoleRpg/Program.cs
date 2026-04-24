@@ -6,7 +6,7 @@ Startup.GameUi.DisplayWelcome();
 bool running = true;
 while (running)
 {
-    string choice = Startup.GameUi.GetMenuChoice();
+    string choice = Startup.GameUi.GetMenuChoice(Startup.GameEngine.ActiveCharacterLabel);
 
     switch (choice)
     {
@@ -15,7 +15,7 @@ while (running)
             Startup.GameEngine.DisplayCharacters();
             break;
         case "2":
-            Startup.GameEngine.FindCharacter();
+            Startup.GameEngine.SelectCharacter();
             break;
         case "3":
             Startup.GameEngine.AddCharacter();
@@ -48,13 +48,15 @@ while (running)
         case "11":
             Startup.GameEngine.DisplayEquipment();
             break;
-        case "12":
-            Startup.GameEngine.EquipItem();
-            break;
 
         // Items
         case "13":
             Startup.GameEngine.AddItem();
+            break;
+
+        // Inventory Management (W12)
+        case "14":
+            Startup.GameEngine.InventoryMenu();
             break;
 
         case "0":

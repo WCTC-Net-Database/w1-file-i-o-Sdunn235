@@ -1,200 +1,232 @@
-# Week 11: Equipment System & Room Navigation — Implementation
+# Week 12: Inventory & Equipment + Advanced LINQ — Implementation
 
 > **Student:** Shawn Dunn
-> **Submitted:** 2026-04-17
+> **Submitted:** 2026-04-23
 > **Database:** `w9_efcore_SDunn` on `bitsql.wctc.edu`
-> **Migration:** `W11_EquipmentRoomNavLucentForge`
+> **Migration:** `W12_InventoryAndSeed`
+> **Solution:** `w12-efcore-adv.sln` (continues the W11 codebase, renamed for this module)
 
 ---
 
 ## Overview
 
-This submission completes the Week 11 assignment (Equipment + Room Navigation) and its stretch goal (Item TPH). It also extends the codebase into the entity foundation for my capstone RPG, **LucentForge** — adding Stats, Resources, Races, Skills, Magic, and stat-scaled Abilities.
+This submission completes the Week 12 assignment (Inventory & Equipment via Container TPH + advanced LINQ on items) and carries forward the LucentForge entity foundation laid down in Week 11.
 
-All Week 11 rubric criteria are met. The shape of some entities differs from the template (see "Design Deviations" below), but the underlying EF Core relationship patterns (self-referencing FKs, one-to-one, one-to-many, TPH, many-to-many with join entities) are all exercised.
+The assignment was an **additive** layer on top of the W11 schema:
+
+- A `Container` TPH was introduced with two subclasses (`Inventory`, `Equipment`) and an `IItemContainer` interface.
+- `Item.ContainerId` became the single foreign key that moves an item between containers — picking up, dropping, equipping, and unequipping are all just FK updates.
+- `Player` gained instance methods (`PickUp`, `Drop`, `Equip`, `Unequip`, `UseItem`) that read from `Character.Inventory` and `Character.Equipment`.
+- A SQL-script seed migration seeds 10 Races, a reference Player (Elara the Bold), her stats/resources, her inventory + equipment containers, a starter kit, and one `EquipmentSlot` row per `SlotType`.
+
+The graded LINQ tasks (Strongest Weapon, Total Value + GroupBy breakdown) are wired into a new **Inventory Management** submenu gated on the active character being a `Player`.
 
 ---
 
 ## Learning Objectives — Status
 
-- [x] Create an Equipment entity with Weapon and Armor properties
-- [x] Create a Room entity with directional navigation (N/S/E/W + Up/Down via Door entity)
-- [x] Configure self-referencing relationships (Door → Room Source + Destination)
-- [x] Configure one-to-one relationships (Character ↔ Stats, Character ↔ Resources)
-- [x] Configure one-to-many relationships (Room → Doors, Character → EquipmentSlots)
-- [x] Configure many-to-many with explicit join (Character ↔ Skill via CharacterSkill)
-- [x] Implement basic room navigation in the game
-- [x] Generate and apply migration for new entities
-- [x] **Stretch: Item TPH** (Item → Equipment → Weapon/Armor, Item → Consumable)
+- [x] Model a polymorphic `Item` hierarchy using TPH (carried from W11: Weapon, Armor, Consumable)
+- [x] Model a polymorphic `Container` hierarchy using TPH (Inventory, Equipment)
+- [x] Understand the difference between item **instances** and item **types** (Container → Items is 1:many on `Item.ContainerId`)
+- [x] Use advanced LINQ (`Where`, `GroupBy`, `OrderBy`, `OfType<T>`, `Sum`, `FirstOrDefault`) on in-memory collections
+- [x] Implement inventory operations: pick up, equip, unequip, use, drop
+- [x] Move items between containers by updating a single foreign key (`Item.ContainerId`)
+- [x] Apply a seed data migration that runs a `.sql` script
+- [x] **Graded Task A:** Strongest Weapon (25 pts)
+- [x] **Graded Task B:** Total Value + GroupBy breakdown (25 pts)
 
 ---
 
-## Design Deviations (Approved / Justified)
+## Design Deviations (Justified)
 
 | Template Approach | My Implementation | Reason |
 |-------------------|-------------------|--------|
-| `Room.NorthRoomId / SouthRoomId / EastRoomId / WestRoomId` (4 self-FKs) | `Door` entity with `SourceRoomId` + `DestinationRoomId` + `Direction` enum + `IsLocked` | Richer: a Door is a first-class entity that can be locked, named, and described. Still exercises self-referencing FKs (Door → Room twice). Supports 6 directions (N/S/E/W/Up/Down) instead of 4. |
-| `Equipment` holds a single `WeaponId + ArmorId` | `EquipmentSlot` entity (one row per slot) with `SlotType` enum | A character equips multiple armor pieces (head, chest, legs, feet, hands) plus main/off-hand weapons. A single Equipment row can't express that. |
-| `Item.Type` string ("Weapon"/"Armor") | TPH: `Item` abstract → `Equipment` abstract → `Weapon`, `Armor`; `Item` → `Consumable` | Stretch goal, plus adds Consumable for potions/food. |
-| `Player` and `Monster` each have `RoomId` | `Character.RoomId` (nullable) on the TPH base | Placement is a Character-level concern. Player/NPC/Animal all inherit it. |
-| Goblin as Character subtype | Goblin as a `MonsterRace`; characters use `Character → Race` FK | Race is data, not a subclass. Same Goblin race can be applied to many NPCs. Migration converts old Goblin rows → NPC discriminator. |
+| `KeyItem` as its own `Item` TPH subclass | `Item.IsKeyItem` bool flag | W11 committed `IsKeyItem` as a bool on `Item`. Converting to a subclass would force re-keying the Items table and offers no structural advantage — key items behave like other items, they just can't be sold or dropped. The W11 decision stands. |
+| `Equipment` container holds items directly | `Equipment` container **owns `EquipmentSlot` rows**, which then reference items | W11 shipped slot-based equipping (MainHand / OffHand / Head / Chest / Legs / Feet / Hands). Ripping that out would reset W11 work for no benefit. `Equipment.Slots` replaces the flat item collection on the Equipment side and still satisfies the `IItemContainer` contract via the items-through-slots relationship. |
+| Container TPH replaces `EquipmentSlot` | **Additive:** Container TPH added; `EquipmentSlot` kept, now owned by `Equipment` | Keeps W11 investment; sets up W13 chests and W14 rooms-as-containers as siblings of Inventory/Equipment without further reshuffling. |
+| Intermediate abstract `Equipment` class under `Item` (W11) | Renamed to `DurableItem` in W12 | Avoid naming collision with the new `Containers.Equipment` class. No DB change — the W11 class was abstract and never a discriminator value. |
 
 ---
 
-## What I Built
+## What's New in W12
 
-### Entities (19 total)
+### New files
 
-**Core character system:**
-- `Character` (TPH base) — RoomId (nullable), RaceId, navs to Stats/Resources/EquipmentSlots/Skills/Abilities/Magics. Derivation helpers: `DeriveMaxHp()`, `DeriveMaxSp()`, `DeriveMaxBp()`, `DeriveMaxBytePool()`, `GetTotalAttack()`, `GetTotalDefense()`.
-- `Player`, `Npc`, `Animal` (TPH subtypes)
-- `Stats` — 7 attributes (Physique, Reflexes, Constitution, Intellect, Intuition, Linguistic, Luck). 1:1 with Character.
-- `Resources` — Hp/MaxHp, Sp/MaxSp, Bp/MaxBp, BytePool/MaxBytePool. 1:1 with Character.
+| Path | Purpose |
+|------|---------|
+| `ConsoleRpgEntities/Models/Containers/IItemContainer.cs` | Interface — Id, Name, Items, AddItem, RemoveItem |
+| `ConsoleRpgEntities/Models/Containers/Container.cs` | Abstract TPH base with `ItemsCollection` + `AddItem`/`RemoveItem` |
+| `ConsoleRpgEntities/Models/Containers/Inventory.cs` | `: Container` — `OwnerCharacterId`, `MaxWeight`, `CurrentWeight`, `CanFit` |
+| `ConsoleRpgEntities/Models/Containers/Equipment.cs` | `: Container` — `OwnerCharacterId`, `Slots` (EquipmentSlot collection) |
+| `ConsoleRpgEntities/Helpers/MigrationHelper.cs` | Reads SQL scripts from `Migrations/Scripts/` at migration-run time |
+| `ConsoleRpgEntities/Migrations/BaseMigration.cs` | Abstract `Migration` subclass that exposes `RunSqlScript` |
+| `ConsoleRpgEntities/Migrations/Scripts/W12_SeedInventoryData.sql` | Idempotent seed script (Races, Elara, containers, starter items, slots) |
+| `ConsoleRpgEntities/Migrations/Scripts/W12_SeedInventoryData.rollback.sql` | Tear-down script used by the migration's `Down()` |
+| `Docs/ASSIGNMENT_README.md` | Archived copy of the teacher's W12 template README |
 
-**Race system (TPH):**
-- `Race` (abstract) — Id, Name, Description
-- `PlayableRace`, `MonsterRace`, `AnimalRace`
+### Modified files
 
-**World:**
-- `Room` — Name, Description, navs to Doors and Characters
-- `Door` — SourceRoomId, DestinationRoomId, Direction, IsLocked, Name, Description
-
-**Items (TPH):**
-- `Item` (abstract) — Name, Description, Value, Weight, IsKeyItem
-- `Equipment` (abstract) — adds Durability
-- `Weapon` — AttackPower, WeaponType
-- `Armor` — DefenseRating, WeightClass, BodySlot
-- `Consumable` — Effect, Potency
-
-**Equipment slots:**
-- `EquipmentSlot` — CharacterId, SlotType, nullable EquippedItemId
-
-**Skills & abilities:**
-- `Skill` — Name, Description, PrimaryAttribute (CoreAttribute), SecondaryAttribute? (CoreAttribute?)
-- `CharacterSkill` (join) — composite key (CharacterId, SkillId), Proficiency (0–100)
-- `Ability` — Power, StaminaCost, Kind (AbilityKind), PrimaryStat (CoreAttribute). M:M with Character.
-- `Magic` — Power, BpCost, BytePoolCost, Element, Kind (MagicKind), PrimaryStat. M:M with Character.
-
-### Enums (9 total)
-
-`CoreAttribute`, `Direction`, `SlotType`, `ArmorWeight`, `BodySlot`, `WeaponType`, `Element`, `AbilityKind`, `MagicKind`
+| Path | Change |
+|------|--------|
+| `ConsoleRpgEntities/Models/Items/Item.cs` | + `ContainerId` (nullable int), + `Container` nav |
+| `ConsoleRpgEntities/Models/Items/DurableItem.cs` | Renamed from `Equipment.cs` (abstract, no DB change) |
+| `ConsoleRpgEntities/Models/Items/Weapon.cs`, `Armor.cs` | Inherit `DurableItem` instead of `Equipment` |
+| `ConsoleRpgEntities/Models/EquipmentSlot.cs` | + `EquipmentContainerId` + `EquipmentContainer` nav |
+| `ConsoleRpgEntities/Models/Character.cs` | + `Inventory?`, `Equipment?` navs; + `TypeName` helper (un-proxies lazy types) |
+| `ConsoleRpgEntities/Models/Player.cs` | + `PickUp`, `Drop`, `Equip`, `Unequip`, `UseItem`, `PickSlotFor`, `BodySlotToSlotType` |
+| `ConsoleRpgEntities/Data/GameContext.cs` | + `Containers` DbSet, Container TPH, 1:1 Character↔Inventory, 1:1 Character↔Equipment, 1:many Container→Items, 1:many Equipment→EquipmentSlots |
+| `ConsoleRpgEntities/Data/IContext.cs` | + `IEnumerable<Container> Containers` |
+| `ConsoleRpgEntities/ConsoleRpgEntities.csproj` | `Migrations/Scripts/*.sql` copied to output |
+| `ConsoleRpg/Services/GameEngine.cs` | `FindCharacter` → `SelectCharacter`, `_activeCharacter`, `TypeName` fix, Rooms list characters, `InventoryMenu` + graded LINQ |
+| `ConsoleRpg/UI/ConsoleGameUi.cs` + `IGameUi.cs` | Active-character header line; new "Inventory Management" menu option |
+| `ConsoleRpg/Program.cs` | Rewired menu for `SelectCharacter` + `InventoryMenu` |
+| `w10-efcore-tph.sln` → `w12-efcore-adv.sln` | Solution file renamed to match module |
 
 ---
 
 ## Relationships Configured
 
-| Pattern | Example |
-|---------|---------|
-| TPH (discriminator) | `Character` (Player/NPC/Animal), `Race` (Playable/Monster/Animal), `Item` (Weapon/Armor/Consumable) |
-| One-to-One | `Character ↔ Stats`, `Character ↔ Resources` |
-| One-to-Many | `Room → Doors`, `Character → EquipmentSlots`, `Race → Characters` |
-| Many-to-Many (implicit) | `Character ↔ Ability`, `Character ↔ Magic` |
-| Many-to-Many (explicit join) | `Character ↔ Skill` via `CharacterSkill` (carries Proficiency) |
-| Self-referencing | `Door → Room` twice (Source + Destination) |
-| Nullable FK with SetNull delete | `Character.RoomId` |
+| Principal | Dependent | Cardinality | FK | On Delete |
+|-----------|-----------|-------------|----|-----------|
+| `Character` | `Inventory` | 1 : 0..1 | `Inventory.OwnerCharacterId` | `ClientCascade` |
+| `Character` | `Equipment` | 1 : 0..1 | `Equipment.OwnerCharacterId` | `ClientCascade` |
+| `Container` | `Item` | 1 : many | `Item.ContainerId` (nullable) | `SetNull` |
+| `Equipment` | `EquipmentSlot` | 1 : many | `EquipmentSlot.EquipmentContainerId` | `Cascade` |
+
+> Why `ClientCascade` on the Character↔Container FKs: SQL Server rejects two cascade paths from the same principal table. EF Core handles the cascade client-side when the Character is tracked, which is how the app accesses containers anyway (via lazy-loaded navs).
+
+### Empty/null tolerance (design principle)
+
+Every container relationship tolerates both empty *and* null:
+
+- **Empty is normal.** `Container.ItemsCollection` starts as `new List<Item>()`; a Container with zero items is valid.
+- **Character-side is nullable.** `Character.Inventory?` and `Character.Equipment?` — a character can exist before being given a backpack or gear.
+- **Item-side is nullable.** `Item.ContainerId` is `int?`. Items can float (orphaned during a move, or dropped in an unpopulated room before W14).
+- **Future chests (W13) and rooms-as-containers (W14)** will be their own Container subclasses — no `OwnerCharacterId` at all, so "no owner" is the shape of those subclasses.
 
 ---
 
-## LucentForge Bible Alignment
+## Graded LINQ Tasks
 
-This is the data layer for my capstone game. Three bible tie-ins worth calling out:
+### Task A — Strongest Weapon
 
-1. **Stats drive everything.** `Character.DeriveMaxHp()` = `50 + Constitution * 5`. Similar derivations for SP, BP, and BytePool. Resources aren't arbitrary — they derive from stats.
-2. **Bits/Bytes magic system.** `Magic.BpCost` (raw instinctive magic, scales off Intuition) vs `Magic.BytePoolCost` (structured deliberate magic, scales off Intellect). Both on the same entity; `PrimaryStat` encodes which applies.
-3. **CoreAttribute as the scaling bridge.** `Ability.PrimaryStat` and `Magic.PrimaryStat` both reference `CoreAttribute`, so future combat resolution can compute effective power as `Stats[PrimaryStat] + Power`.
+```csharp
+var strongest = _activePlayer.Inventory.ItemsCollection
+    .OfType<Weapon>()
+    .OrderByDescending(w => w.AttackPower)
+    .FirstOrDefault();
+```
+
+With Elara's seeded kit (Rusty Sword AP=7, Oak Bow AP=9), this returns **Oak Bow — Attack 9 (Bow)**.
+
+### Task B — Total Value + GroupBy breakdown
+
+```csharp
+int total = items.Sum(i => i.Value);
+var breakdown = items
+    .GroupBy(i => i.TypeNameForItem())
+    .Select(g => new { Type = g.Key, Gold = g.Sum(i => i.Value), Count = g.Count() })
+    .OrderByDescending(x => x.Gold)
+    .ToList();
+```
+
+Output format:
+
+```
+--- Inventory Value ---
+  Total: 150g across 7 items
+  By type:
+    Armor         2 items      60g
+    Weapon        2 items      45g
+    Consumable    3 items      45g
+```
 
 ---
 
-## Migration Notes
+## Migration: `W12_InventoryAndSeed`
 
-Migration `W11_EquipmentRoomNavLucentForge` was **hand-edited** after scaffolding to safely convert existing data:
+Single migration handles both schema *and* seed:
 
-- **Dropped** the old `Sneakiness` column on Characters (instead of the scaffolder's rename-to-RaceId, which would have moved junk data into a real FK column).
-- **Added** `RaceId` as a fresh nullable FK.
-- **Converted** existing `Goblin` TPH discriminator rows to `NPC` via raw SQL so legacy records survive the refactor.
+1. **Schema (`Up`):**
+   - Adds `Items.ContainerId` (nullable FK → Containers, OnDelete SetNull)
+   - Adds `EquipmentSlots.EquipmentContainerId` (nullable FK → Containers, OnDelete Cascade)
+   - Creates `Containers` table (Id, Name, ContainerType discriminator, OwnerCharacterId, Inventory_OwnerCharacterId, MaxWeight)
+   - Adds indexes + FK constraints
+
+2. **Seed (`Up` — after schema):** calls `RunSqlScript(migrationBuilder, "W12_SeedInventoryData.sql")` which:
+   - Inserts 10 Races (3 Playable: Human/Elf/Dwarf, 7 Monster: Goblin/Orc/Troll/Mimic/Slime/Chimera/Kobold)
+   - Inserts Elara the Bold (Player, Human, Level 1) + her Stats + Resources
+   - Inserts her `Inventory` (MaxWeight 100) and `Equipment` containers
+   - Inserts starter items: Rusty Sword, Oak Bow, Leather Helm, Leather Tunic, Healing Potion, Stamina Draught, Old Brass Key (IsKeyItem=1)
+   - Inserts one `EquipmentSlot` per `SlotType` (MainHand, OffHand, Head, Chest, Legs, Feet, Hands), all empty
+
+All inserts are guarded with `NOT EXISTS` checks against stable Names, so the migration is idempotent — safe to re-run against a shared DB.
+
+3. **`Down`** runs `W12_SeedInventoryData.rollback.sql` first (removes Elara's rows in reverse FK order), then drops the schema.
 
 ---
 
 ## Running the Game
 
-Menu options (Program.cs):
-
-| # | Option |
-|---|--------|
-| 1 | Display Characters |
-| 2 | Find Character |
-| 3 | Add Character |
-| 4 | Level Up Character |
-| 5 | Display Character Detail |
-| 6 | Display Rooms |
-| 7 | Add Room |
-| 8 | Add Door |
-| 9 | Display Current Room |
-| 10 | Move Player |
-| 11 | Display Equipment |
-| 12 | Equip Item |
-| 13 | Add Item |
-| 0 | Exit |
-
----
-
-## Project Structure
-
 ```
-w11-efcore-equipment/
-│
-├── ConsoleRpg/                                 # UI & service layer
-│   ├── Program.cs
-│   ├── Startup.cs
-│   ├── Services/GameEngine.cs
-│   └── UI/
-│       ├── IGameUi.cs
-│       └── ConsoleGameUi.cs
-│
-└── ConsoleRpgEntities/                         # Data & entities
-    ├── Data/
-    │   ├── GameContext.cs                      # All DbSets + OnModelCreating
-    │   └── IContext.cs
-    ├── Migrations/
-    │   └── 20260417094734_W11_EquipmentRoomNavLucentForge.cs
-    └── Models/
-        ├── Character.cs  Player.cs  Npc.cs  Animal.cs
-        ├── Stats.cs  Resources.cs
-        ├── Room.cs  Door.cs  EquipmentSlot.cs
-        ├── Abilities/Ability.cs
-        ├── Enums/ (9 enums)
-        ├── Items/Item.cs  Equipment.cs  Weapon.cs  Armor.cs  Consumable.cs
-        ├── Magic/Magic.cs
-        ├── Races/Race.cs  PlayableRace.cs  MonsterRace.cs  AnimalRace.cs
-        └── Skills/Skill.cs  CharacterSkill.cs
+14. Inventory Management       ← new W12 submenu
+  1. List items (with weight)
+  2. Search by name
+  3. Group by type
+  4. Sort items
+  5. Equip item from inventory
+  6. Unequip item
+  7. Use consumable
+  8. Strongest weapon (graded)
+  9. Total value + breakdown (graded)
+  0. Back to main menu
 ```
+
+Flow:
+1. From the main menu, choose **2. Select Character** and enter `Elara` (the active-character header then reads `[Active: Elara the Bold (Player)]`).
+2. Choose **14. Inventory Management** — the submenu only enables when the active character is a `Player` with an `Inventory` container.
+3. All options operate on `_activePlayer.Inventory.ItemsCollection` in memory; **8** and **9** are the graded LINQ tasks.
 
 ---
 
 ## Rubric Self-Assessment
 
-| Criteria | Points | Status |
-|----------|--------|--------|
-| Equipment Class | 15 | Complete — `EquipmentSlot` per slot, richer than template |
-| Item Class | 15 | Complete — TPH hierarchy |
-| Room Class | 15 | Complete — with `Door` entity for richer navigation |
-| Player/Monster Integration | 15 | Complete — `Character.RoomId` on TPH base |
-| GameContext Setup | 15 | Complete — 3 TPH hierarchies, all relationships configured |
-| Room Navigation | 15 | Complete — `MovePlayer()`, `DisplayCurrentRoom()` |
-| Code Quality | 10 | Clean, lazy-loaded, SOLID |
-| **Total** | **100** | |
-| **Stretch: Item TPH** | **+10** | Complete — Item → Equipment → Weapon/Armor, Item → Consumable |
+| Criterion | Weight | Status | Notes |
+|-----------|--------|--------|-------|
+| Container TPH (Inventory + Equipment) with `Item.ContainerId` FK | required | ✅ | `Container` abstract + 2 subclasses; `Items.ContainerId` nullable FK with SetNull |
+| Player instance methods (PickUp/Drop/Equip/Unequip/UseItem) | required | ✅ | All five present; operate on `Inventory`/`Equipment` navs |
+| Inventory sub-menu with LINQ ops (Where/GroupBy/OrderBy/OfType/Sum) | required | ✅ | 9-option submenu; every required LINQ operator used |
+| Graded Task A: Strongest Weapon | 25 pts | ✅ | `OfType<Weapon>().OrderByDescending(w => w.AttackPower).FirstOrDefault()` |
+| Graded Task B: Total Value + breakdown | 25 pts | ✅ | `Sum` + `GroupBy` + `Select` projection with ordered output |
+| Seed migration via `.sql` script | required | ✅ | `W12_InventoryAndSeed` + `MigrationHelper` + `BaseMigration` + `Migrations/Scripts/*.sql` copied to output |
+| Weight limit UX (stretch) | +10 pts | ✅ | `Inventory.CurrentWeight`/`CanFit`; inventory list shows `X / MaxWeight lbs` |
+| **Target** |  | **100 + 10 stretch** |  |
+
+---
+
+## LucentForge Bible Alignment
+
+The Container pattern introduced here is the foundation for:
+
+- **W13** — Chests as a third `Container` subclass (no `OwnerCharacterId`; room-attached), monster loot drops become chests that spawn on death.
+- **W14** — Rooms-as-containers. `Room` will gain a `RoomContainer` child so dropped items in a room are actually in a container, not floating with `ContainerId = NULL`.
+- **W15+** — Crafting stations and merchant stock as further Container subclasses.
+
+By building Container TPH cleanly this week — additive to EquipmentSlot, with nullable owner FKs and a settled empty/null stance — the rest of the semester should be subclass extensions, not re-architecture.
 
 ---
 
 ## Known Issues / Follow-up
 
-Observed during testing; tracked for next iteration:
+- The scaffolded Container table has both `OwnerCharacterId` and `Inventory_OwnerCharacterId` columns (EF Core disambiguated the same-named property on two TPH subclasses). Only one is populated per row, gated by discriminator. This is cosmetic, not functional.
+- `DisplayCurrentRoom` and `MovePlayer` still pick "any Player" via `OfType<Player>()` when `_activeCharacter` isn't set, then prompt. A cleaner follow-up would force selection up front.
+- Inventory menu does not yet support "pick up from room" or "drop to room" — W14 territory, when rooms become containers.
 
-1. `GetType().Name` returns `"PlayerProxy"` for lazy-loaded entities (should use `BaseType`)
-2. `Display Rooms` doesn't list characters currently in each room
-3. No "active character" concept — `Find Character` should select, not just display
-4. Character type selection (Player/NPC/Animal) could be clearer in the UI
-5. No inventory for Consumables; no slot validation (can equip a potion to feet)
-6. `Consumable.Effect` / `Potency` have no help text explaining expected values
-7. Race data not seeded (Human, Elf, Dwarf, Goblin, Orc, Troll, Mimic, Slime, Chimera, Kobold)
+---
+
+## Verification Steps
+
+1. `dotnet build w12-efcore-adv.sln` — 0 warnings, 0 errors
+2. `dotnet ef database update --project ConsoleRpgEntities --startup-project ConsoleRpg` — migration applies cleanly
+3. SSMS: `SELECT COUNT(*) FROM Races` → 10; `SELECT * FROM Containers` → 2 rows for Elara; `SELECT * FROM Items WHERE ContainerId IS NOT NULL` → starter kit
+4. App walkthrough: Select Elara → Inventory Management → all 9 options produce expected output
