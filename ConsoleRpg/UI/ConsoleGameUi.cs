@@ -4,7 +4,11 @@ public class ConsoleGameUi : IGameUi
 {
     public void DisplayWelcome()
     {
-        Console.Clear();
+        DrawBanner();
+    }
+
+    private static void DrawBanner()
+    {
         Console.WriteLine("╔══════════════════════════════════════════╗");
         Console.WriteLine("║       W13 Console RPG — LucentForge     ║");
         Console.WriteLine("║      Chests, Monster Loot & Lockpicks   ║");
@@ -19,24 +23,27 @@ public class ConsoleGameUi : IGameUi
 
     public string GetMenuChoice(string? activeLabel)
     {
+        Console.Clear();
+        DrawBanner();
+
         if (!string.IsNullOrWhiteSpace(activeLabel))
-            Console.WriteLine($"[Active: {activeLabel}]");
+            Console.WriteLine($"[Active: {activeLabel}]\n");
 
         Console.WriteLine("=== Main Menu ===");
         Console.WriteLine("--- Characters ---");
         Console.WriteLine(" 1. Display Characters");
         Console.WriteLine(" 2. Select Character");
         Console.WriteLine(" 3. Add Character");
-        Console.WriteLine(" 4. Level Up Character");
-        Console.WriteLine(" 5. Character Detail");
+        Console.WriteLine(" 4. Edit Character");
+        Console.WriteLine(" 5. Delete Character");
+        Console.WriteLine(" 6. Level Up Character");
+        Console.WriteLine(" 7. Character Detail");
         Console.WriteLine("--- World ---");
-        Console.WriteLine(" 6. Display Rooms");
-        Console.WriteLine(" 7. Add Room");
-        Console.WriteLine(" 8. Connect Rooms (Add Door)");
-        Console.WriteLine(" 9. Display Current Room");
-        Console.WriteLine("10. Move Player");
-        Console.WriteLine("--- Equipment ---");
-        Console.WriteLine("11. Display Equipment");
+        Console.WriteLine(" 8. Display Rooms");
+        Console.WriteLine(" 9. Add Room");
+        Console.WriteLine("10. Connect Rooms (Add Door)");
+        Console.WriteLine("11. Display Current Room");
+        Console.WriteLine("12. Move Player");
         Console.WriteLine("--- Items ---");
         Console.WriteLine("13. Add Item");
         Console.WriteLine("--- Inventory (Player) ---");
@@ -56,7 +63,6 @@ public class ConsoleGameUi : IGameUi
     public void PauseAndClear()
     {
         Console.WriteLine("\nPress any key to continue...");
-        Console.ReadKey();
-        Console.Clear();
+        Console.ReadKey(intercept: true);
     }
 }

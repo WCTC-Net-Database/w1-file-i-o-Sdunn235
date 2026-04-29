@@ -25,6 +25,52 @@ public class GameEngine
     public string? ActiveCharacterLabel =>
         _activeCharacter is null ? null : $"{_activeCharacter.Name} ({_activeCharacter.TypeName})";
 
+    // Startup data-integrity sweep:
+    //   1. Stats row must exist for every Character (default to all zeros).
+    //   2. EquipmentSlots must only hold items whose EligibleSlot matches the slot.
+    //      Bad rows from manual SQL inserts get nulled out so the equip pipeline is the
+    //      only legal entry point.
+    public void EnsureCharacterIntegrity()
+    {
+        // 1. Backfill missing Stats rows.
+        var orphans = _dbContext.Characters.Where(c => c.Stats == null).ToList();
+        foreach (var c in orphans)
+            _dbContext.AddEntity(new Stats { CharacterId = c.Id });
+        if (orphans.Count > 0)
+            _dbContext.SaveChanges();
+
+        // 2. Sweep EquipmentSlots for slot/item mismatches.
+        int slotsCleared = 0;
+        var slots = _dbContext.EquipmentSlots
+            .Where(s => s.EquippedItemId != null)
+            .ToList();
+
+        foreach (var slot in slots)
+        {
+            var item = slot.EquippedItem;
+            if (item is null) continue;
+
+            // Shield items can occupy MainHand or OffHand (handled in Shield class).
+            // Everything else: EligibleSlot must equal the slot's SlotType, else clear.
+            var eligible = item.EligibleSlot;
+            bool valid = eligible.HasValue && eligible.Value == slot.Slot;
+
+            if (item is Shield && (slot.Slot == SlotType.MainHand || slot.Slot == SlotType.OffHand))
+                valid = true;
+
+            if (!valid)
+            {
+                slot.EquippedItemId = null;
+                slotsCleared++;
+            }
+        }
+
+        if (slotsCleared > 0) _dbContext.SaveChanges();
+
+        if (orphans.Count > 0 || slotsCleared > 0)
+            Console.WriteLine($"[Startup] Integrity sweep: backfilled {orphans.Count} Stats row(s), cleared {slotsCleared} invalid equipment slot(s).");
+    }
+
     // -------------------------------------------------------------------------
     // Character CRUD
     // -------------------------------------------------------------------------
@@ -150,13 +196,16 @@ public class GameEngine
         _dbContext.AddEntity(character);
         _dbContext.SaveChanges();
 
+        // Stats default to 0 — never null. Edit via Edit Character menu to raise them.
         var stats = new Stats
         {
             CharacterId = character.Id,
-            Physique = 5, Reflexes = 5, Constitution = 5,
-            Intellect = 5, Intuition = 5, Linguistic = 5, Luck = 5
+            Physique = 0, Reflexes = 0, Constitution = 0,
+            Intellect = 0, Intuition = 0, Linguistic = 0, Luck = 0
         };
         _dbContext.AddEntity(stats);
+        _dbContext.SaveChanges();
+        character.Stats = stats;
 
         var resources = new Resources
         {
@@ -180,6 +229,347 @@ public class GameEngine
         character.Level++;
         _dbContext.SaveChanges();
         Console.WriteLine($"\n{character.Name} is now level {character.Level}!");
+    }
+
+    // -------------------------------------------------------------------------
+    // Edit Character — submenu over Identity / Stats / Abilities / Spells /
+    // Equipment / Inventory. Each leaf saves changes after the user confirms.
+    // -------------------------------------------------------------------------
+
+    public void EditCharacter()
+    {
+        var character = ResolveActiveOrPrompt("edit");
+        if (character is null) return;
+
+        while (true)
+        {
+            Console.WriteLine($"\n=== Edit: {character.Name} ({character.TypeName}) ===");
+            Console.WriteLine("  1. Identity (Name, Level, Race, Room)");
+            Console.WriteLine("  2. Stats");
+            Console.WriteLine("  3. Abilities");
+            Console.WriteLine("  4. Spells / Magic");
+            Console.WriteLine("  5. Equipment");
+            Console.WriteLine("  6. Inventory");
+            Console.WriteLine("  0. Done");
+            Console.Write("Choice: ");
+            var choice = Console.ReadLine()?.Trim();
+
+            switch (choice)
+            {
+                case "1": EditIdentity(character); break;
+                case "2": EditStats(character); break;
+                case "3": EditAbilities(character); break;
+                case "4": EditSpells(character); break;
+                case "5": EditEquipment(character); break;
+                case "6": EditInventory(character); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid choice."); break;
+            }
+        }
+    }
+
+    private void EditIdentity(Character c)
+    {
+        Console.Write($"\nName [{c.Name}] (blank to keep): ");
+        var name = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(name)) c.Name = name.Trim();
+
+        Console.Write($"Level [{c.Level}] (blank to keep): ");
+        var lvl = Console.ReadLine();
+        if (int.TryParse(lvl, out var newLvl)) c.Level = newLvl;
+
+        var races = _dbContext.Races.ToList();
+        if (races.Any())
+        {
+            Console.WriteLine("\nAvailable Races (blank=no change, 0=clear):");
+            foreach (var r in races)
+                Console.WriteLine($"  [{r.Id}] {r.Name}");
+            Console.Write($"Race ID [current: {c.Race?.Name ?? "None"}]: ");
+            var raceInput = Console.ReadLine()?.Trim();
+            if (int.TryParse(raceInput, out var rid))
+            {
+                if (rid == 0) { c.RaceId = null; }
+                else if (races.Any(r => r.Id == rid))
+                {
+                    if (c is Player && races.First(r => r.Id == rid) is not PlayableRace)
+                        Console.WriteLine("Players require a Playable race — leaving unchanged.");
+                    else c.RaceId = rid;
+                }
+            }
+        }
+
+        var rooms = _dbContext.Rooms.ToList();
+        if (rooms.Any())
+        {
+            Console.WriteLine("\nAvailable Rooms (blank=no change, 0=clear):");
+            foreach (var r in rooms)
+                Console.WriteLine($"  [{r.Id}] {r.Name}");
+            Console.Write($"Room ID [current: {c.Room?.Name ?? "None"}]: ");
+            var roomInput = Console.ReadLine()?.Trim();
+            if (int.TryParse(roomInput, out var rmId))
+            {
+                if (rmId == 0) c.RoomId = null;
+                else if (rooms.Any(r => r.Id == rmId)) c.RoomId = rmId;
+            }
+        }
+
+        _dbContext.SaveChanges();
+        Console.WriteLine("Identity updated.");
+    }
+
+    private void EditStats(Character c)
+    {
+        if (c.Stats is null)
+        {
+            // Defensive — backfill should prevent this, but never trust assumed state.
+            var fresh = new Stats { CharacterId = c.Id };
+            _dbContext.AddEntity(fresh);
+            _dbContext.SaveChanges();
+            c.Stats = fresh;
+        }
+
+        var s = c.Stats;
+        var stats = new (string Label, Func<int> Get, Action<int> Set)[]
+        {
+            ("Physique",     () => s.Physique,     v => s.Physique = v),
+            ("Reflexes",     () => s.Reflexes,     v => s.Reflexes = v),
+            ("Constitution", () => s.Constitution, v => s.Constitution = v),
+            ("Intellect",    () => s.Intellect,    v => s.Intellect = v),
+            ("Intuition",    () => s.Intuition,    v => s.Intuition = v),
+            ("Linguistic",   () => s.Linguistic,   v => s.Linguistic = v),
+            ("Luck",         () => s.Luck,         v => s.Luck = v),
+        };
+
+        while (true)
+        {
+            Console.WriteLine($"\n--- Stats: {c.Name} ---");
+            for (int i = 0; i < stats.Length; i++)
+                Console.WriteLine($"  {i + 1}. {stats[i].Label,-13} {stats[i].Get()}");
+            Console.WriteLine("  0. Back");
+            Console.Write("Pick stat to edit: ");
+            var pick = Console.ReadLine()?.Trim();
+            if (pick == "0") return;
+            if (!int.TryParse(pick, out var idx) || idx < 1 || idx > stats.Length)
+            {
+                Console.WriteLine("Invalid."); continue;
+            }
+
+            Console.Write($"New {stats[idx - 1].Label} value: ");
+            if (!int.TryParse(Console.ReadLine(), out var v) || v < 0)
+            {
+                Console.WriteLine("Stats must be non-negative integers."); continue;
+            }
+            stats[idx - 1].Set(v);
+            _dbContext.SaveChanges();
+            Console.WriteLine($"{stats[idx - 1].Label} = {v}.");
+        }
+    }
+
+    private void EditAbilities(Character c)
+    {
+        while (true)
+        {
+            Console.WriteLine($"\n--- Abilities: {c.Name} ---");
+            if (c.Abilities.Any())
+                foreach (var a in c.Abilities)
+                    Console.WriteLine($"  [{a.Id}] {a.Name} (Power {a.Power})");
+            else
+                Console.WriteLine("  (none)");
+
+            Console.WriteLine("  1. Add ability   2. Remove ability   0. Back");
+            Console.Write("Choice: ");
+            var ch = Console.ReadLine()?.Trim();
+            if (ch == "0") return;
+
+            if (ch == "1")
+            {
+                var pool = _dbContext.Abilities.Where(a => !c.Abilities.Contains(a)).ToList();
+                if (!pool.Any()) { Console.WriteLine("No abilities available to add."); continue; }
+                Console.WriteLine("\nAvailable:");
+                foreach (var a in pool) Console.WriteLine($"  [{a.Id}] {a.Name}");
+                Console.Write("Ability ID: ");
+                if (int.TryParse(Console.ReadLine(), out var aid))
+                {
+                    var picked = pool.FirstOrDefault(a => a.Id == aid);
+                    if (picked != null) { c.Abilities.Add(picked); _dbContext.SaveChanges(); Console.WriteLine($"Added {picked.Name}."); }
+                    else Console.WriteLine("Not in pool.");
+                }
+            }
+            else if (ch == "2")
+            {
+                if (!c.Abilities.Any()) { Console.WriteLine("Nothing to remove."); continue; }
+                Console.Write("Ability ID to remove: ");
+                if (int.TryParse(Console.ReadLine(), out var aid))
+                {
+                    var picked = c.Abilities.FirstOrDefault(a => a.Id == aid);
+                    if (picked != null) { c.Abilities.Remove(picked); _dbContext.SaveChanges(); Console.WriteLine($"Removed {picked.Name}."); }
+                    else Console.WriteLine("Not on character.");
+                }
+            }
+            else Console.WriteLine("Invalid.");
+        }
+    }
+
+    private void EditSpells(Character c)
+    {
+        while (true)
+        {
+            Console.WriteLine($"\n--- Spells / Magic: {c.Name} ---");
+            if (c.Magics.Any())
+                foreach (var m in c.Magics)
+                    Console.WriteLine($"  [{m.Id}] {m.Name} ({m.Element}, Power {m.Power})");
+            else
+                Console.WriteLine("  (none)");
+
+            Console.WriteLine("  1. Add spell   2. Remove spell   0. Back");
+            Console.Write("Choice: ");
+            var ch = Console.ReadLine()?.Trim();
+            if (ch == "0") return;
+
+            if (ch == "1")
+            {
+                var pool = _dbContext.Magics.Where(m => !c.Magics.Contains(m)).ToList();
+                if (!pool.Any()) { Console.WriteLine("No spells available."); continue; }
+                Console.WriteLine("\nAvailable:");
+                foreach (var m in pool) Console.WriteLine($"  [{m.Id}] {m.Name} ({m.Element})");
+                Console.Write("Spell ID: ");
+                if (int.TryParse(Console.ReadLine(), out var mid))
+                {
+                    var picked = pool.FirstOrDefault(m => m.Id == mid);
+                    if (picked != null) { c.Magics.Add(picked); _dbContext.SaveChanges(); Console.WriteLine($"Added {picked.Name}."); }
+                    else Console.WriteLine("Not in pool.");
+                }
+            }
+            else if (ch == "2")
+            {
+                if (!c.Magics.Any()) { Console.WriteLine("Nothing to remove."); continue; }
+                Console.Write("Spell ID to remove: ");
+                if (int.TryParse(Console.ReadLine(), out var mid))
+                {
+                    var picked = c.Magics.FirstOrDefault(m => m.Id == mid);
+                    if (picked != null) { c.Magics.Remove(picked); _dbContext.SaveChanges(); Console.WriteLine($"Removed {picked.Name}."); }
+                    else Console.WriteLine("Not on character.");
+                }
+            }
+            else Console.WriteLine("Invalid.");
+        }
+    }
+
+    private void EditEquipment(Character c)
+    {
+        if (c is not Player player)
+        {
+            Console.WriteLine($"\n{c.Name} is a {c.TypeName} — equipment management is Player-only.");
+            return;
+        }
+
+        while (true)
+        {
+            Console.WriteLine($"\n--- Equipment: {player.Name} ---");
+            if (player.EquipmentSlots.Any())
+                foreach (var slot in player.EquipmentSlots)
+                    Console.WriteLine($"  {slot.Slot,-9} {slot.EquippedItem?.Name ?? "(empty)"}");
+            else
+                Console.WriteLine("  (no slots)");
+
+            Console.WriteLine("  1. Equip from inventory   2. Unequip   0. Back");
+            Console.Write("Choice: ");
+            var ch = Console.ReadLine()?.Trim();
+            switch (ch)
+            {
+                case "1": InventoryEquip(player); break;
+                case "2": InventoryUnequip(player); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private void EditInventory(Character c)
+    {
+        if (c is not Player player)
+        {
+            Console.WriteLine($"\n{c.Name} is a {c.TypeName} — inventory is Player-only.");
+            return;
+        }
+        if (player.Inventory is null)
+        {
+            Console.WriteLine($"\n{player.Name} has no inventory container.");
+            return;
+        }
+
+        while (true)
+        {
+            var items = Items(player).ToList();
+            Console.WriteLine($"\n--- Inventory: {player.Name} ({items.Count} items) ---");
+            foreach (var i in items)
+                Console.WriteLine($"  [{i.Id}] {i.Name} ({i.TypeNameForItem()})");
+
+            Console.WriteLine("  1. Add item by ID   2. Remove item by ID   0. Back");
+            Console.Write("Choice: ");
+            var ch = Console.ReadLine()?.Trim();
+
+            if (ch == "0") return;
+
+            if (ch == "1")
+            {
+                var pool = _dbContext.Items.Where(i => i.ContainerId == null).ToList();
+                if (!pool.Any()) { Console.WriteLine("No unowned items in the database."); continue; }
+                Console.WriteLine("\nUnowned items:");
+                foreach (var i in pool) Console.WriteLine($"  [{i.Id}] {i.Name} ({i.TypeNameForItem()}, {i.Weight} lbs)");
+                Console.Write("Item ID: ");
+                if (int.TryParse(Console.ReadLine(), out var iid))
+                {
+                    var picked = pool.FirstOrDefault(i => i.Id == iid);
+                    if (picked != null) { picked.ContainerId = player.Inventory.Id; _dbContext.SaveChanges(); Console.WriteLine($"Added {picked.Name}."); }
+                    else Console.WriteLine("Not unowned.");
+                }
+            }
+            else if (ch == "2")
+            {
+                if (!items.Any()) { Console.WriteLine("Nothing to remove."); continue; }
+                Console.Write("Item ID to remove from inventory (item stays in DB, becomes unowned): ");
+                if (int.TryParse(Console.ReadLine(), out var iid))
+                {
+                    var picked = items.FirstOrDefault(i => i.Id == iid);
+                    if (picked != null) { picked.ContainerId = null; _dbContext.SaveChanges(); Console.WriteLine($"Removed {picked.Name}."); }
+                    else Console.WriteLine("Not in inventory.");
+                }
+            }
+            else Console.WriteLine("Invalid.");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Delete Character
+    // -------------------------------------------------------------------------
+
+    public void DeleteCharacter()
+    {
+        DisplayCharacters();
+        Console.Write("\nName of character to delete: ");
+        var name = Console.ReadLine()?.Trim();
+        if (string.IsNullOrEmpty(name)) { Console.WriteLine("Cancelled."); return; }
+
+        var character = _dbContext.Characters.FirstOrDefault(c =>
+            c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (character is null) { Console.WriteLine($"No character named '{name}'."); return; }
+
+        Console.Write($"Type DELETE to confirm removal of {character.Name} ({character.TypeName}): ");
+        if (!string.Equals(Console.ReadLine(), "DELETE", StringComparison.Ordinal))
+        {
+            Console.WriteLine("Cancelled."); return;
+        }
+
+        // Touch nav properties so EF's ClientCascade tracks them before removal.
+        _ = character.Stats; _ = character.Resources;
+        _ = character.Inventory; _ = character.Equipment;
+
+        if (_activeCharacter?.Id == character.Id) _activeCharacter = null;
+
+        _dbContext.RemoveEntity(character);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Deleted {character.Name}.");
     }
 
     public void DisplayCharacterDetail()
@@ -422,39 +812,12 @@ public class GameEngine
     }
 
     // -------------------------------------------------------------------------
-    // Equipment (W11 carryover — slot-centric view)
-    // -------------------------------------------------------------------------
-
-    public void DisplayEquipment()
-    {
-        var player = ResolveActivePlayer();
-        if (player is null) return;
-
-        Console.WriteLine($"\n=== {player.Name}'s Equipment ===\n");
-
-        if (!player.EquipmentSlots.Any())
-        {
-            Console.WriteLine("  No equipment slots.");
-            return;
-        }
-
-        foreach (var slot in player.EquipmentSlots)
-        {
-            string itemLabel = slot.EquippedItem?.Name ?? "(empty)";
-            Console.WriteLine($"  {slot.Slot}: {itemLabel}");
-        }
-
-        Console.WriteLine($"\n  Total Attack:  {player.GetTotalAttack()}");
-        Console.WriteLine($"  Total Defense: {player.GetTotalDefense()}");
-    }
-
-    // -------------------------------------------------------------------------
     // Items
     // -------------------------------------------------------------------------
 
     public void AddItem()
     {
-        Console.Write("Item type (1=Weapon, 2=Armor, 3=Consumable): ");
+        Console.Write("Item type (1=Weapon, 2=Armor, 3=Shield, 4=Consumable): ");
         var typeChoice = Console.ReadLine()?.Trim();
 
         Console.Write("Name: ");
@@ -501,6 +864,21 @@ public class GameEngine
                 };
                 break;
             case "3":
+                Console.Write("Defense Rating: ");
+                int.TryParse(Console.ReadLine(), out var sDef);
+                Console.Write("Weight Class (Light/Medium/Heavy): ");
+                Enum.TryParse<ArmorWeight>(Console.ReadLine(), true, out var sArmorWt);
+                Console.Write("Durability: ");
+                int.TryParse(Console.ReadLine(), out var sDur);
+                item = new Shield
+                {
+                    Name = name, Description = desc, Value = value, Weight = weight,
+                    DefenseRating = sDef, WeightClass = sArmorWt,
+                    Slot = BodySlot.Hands, // placeholder; Shield.EligibleSlot overrides this
+                    Durability = sDur
+                };
+                break;
+            case "4":
                 Console.Write("Effect: ");
                 var effect = Console.ReadLine() ?? string.Empty;
                 Console.Write("Potency: ");

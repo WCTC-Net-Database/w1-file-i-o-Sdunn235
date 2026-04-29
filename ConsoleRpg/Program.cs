@@ -21,32 +21,33 @@ while (running)
             Startup.GameEngine.AddCharacter();
             break;
         case "4":
-            Startup.GameEngine.LevelUpCharacter();
+            Startup.GameEngine.EditCharacter();
             break;
         case "5":
+            Startup.GameEngine.DeleteCharacter();
+            break;
+        case "6":
+            Startup.GameEngine.LevelUpCharacter();
+            break;
+        case "7":
             Startup.GameEngine.DisplayCharacterDetail();
             break;
 
         // World
-        case "6":
+        case "8":
             Startup.GameEngine.DisplayRooms();
             break;
-        case "7":
+        case "9":
             Startup.GameEngine.AddRoom();
             break;
-        case "8":
+        case "10":
             Startup.GameEngine.AddDoor();
             break;
-        case "9":
+        case "11":
             Startup.GameEngine.DisplayCurrentRoom();
             break;
-        case "10":
+        case "12":
             Startup.GameEngine.MovePlayer();
-            break;
-
-        // Equipment
-        case "11":
-            Startup.GameEngine.DisplayEquipment();
             break;
 
         // Items

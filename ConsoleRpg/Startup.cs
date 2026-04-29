@@ -14,5 +14,6 @@ public static class Startup
         GameUi = new ConsoleGameUi();
         IContext dbContext = new GameContext();
         GameEngine = new GameEngine(dbContext, GameUi);
+        GameEngine.EnsureCharacterIntegrity();
     }
 }

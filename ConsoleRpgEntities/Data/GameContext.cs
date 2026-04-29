@@ -95,6 +95,7 @@ public class GameContext : DbContext, IContext
             .HasDiscriminator<string>("ItemType")
             .HasValue<Weapon>("Weapon")
             .HasValue<Armor>("Armor")
+            .HasValue<Shield>("Shield")
             .HasValue<Consumable>("Consumable");
 
         // --- Container TPH ---
