@@ -1,39 +1,45 @@
-# Week 12: Inventory & Equipment + Advanced LINQ — Implementation
+# Week 13: Chests & Monster Loot — Implementation
 
 > **Student:** Shawn Dunn
-> **Submitted:** 2026-04-23
+> **Submitted:** 2026-04-28
 > **Database:** `w9_efcore_SDunn` on `bitsql.wctc.edu`
-> **Migration:** `W12_InventoryAndSeed`
-> **Solution:** `w12-efcore-adv.sln` (continues the W11 codebase, renamed for this module)
+> **Migrations:** `W13_AddChestsAndMonsterLoot` (schema) + `W13_SeedWorldContent` (data)
+> **Solution:** `w13-chest-loot.sln` (continues the W12 codebase)
 
 ---
 
 ## Overview
 
-This submission completes the Week 12 assignment (Inventory & Equipment via Container TPH + advanced LINQ on items) and carries forward the LucentForge entity foundation laid down in Week 11.
+W13 demonstrates the **Open/Closed Principle** by extending the W12 `Container`
+TPH with two new subclasses — `Chest` and `MonsterLoot` — without modifying any
+W11 or W12 code. It also introduces **`ILockable`** as a separate interface so
+chests advertise *two* capabilities (holds items, can be locked) without
+collapsing them into one bloated contract. W14 will reuse `ILockable` on `Door`.
 
-The assignment was an **additive** layer on top of the W11 schema:
+The graded LINQ tasks (Richest Locked Chest, DisarmTrap) are wired into a new
+**Chest Interaction** submenu (option 15), gated on the active character being
+a `Player`.
 
-- A `Container` TPH was introduced with two subclasses (`Inventory`, `Equipment`) and an `IItemContainer` interface.
-- `Item.ContainerId` became the single foreign key that moves an item between containers — picking up, dropping, equipping, and unequipping are all just FK updates.
-- `Player` gained instance methods (`PickUp`, `Drop`, `Equip`, `Unequip`, `UseItem`) that read from `Character.Inventory` and `Character.Equipment`.
-- A SQL-script seed migration seeds 10 Races, a reference Player (Elara the Bold), her stats/resources, her inventory + equipment containers, a starter kit, and one `EquipmentSlot` row per `SlotType`.
-
-The graded LINQ tasks (Strongest Weapon, Total Value + GroupBy breakdown) are wired into a new **Inventory Management** submenu gated on the active character being a `Player`.
+A small **LucentForge integration** is layered onto `TryUnlock`: lockpicking
+becomes a real skill check using `Reflexes` + `CharacterSkill.Proficiency` for
+the seeded `Lockpicking` skill row, rolled against `Chest.UnlockDC`. Specific
+keys (e.g., `Dungeon Key` with `KeyId = "dungeon-main"`) bypass the roll
+entirely. This is the *only* LF integration scoped to W13 — magic-warded
+chests and combat are deferred to W14/W15.
 
 ---
 
 ## Learning Objectives — Status
 
-- [x] Model a polymorphic `Item` hierarchy using TPH (carried from W11: Weapon, Armor, Consumable)
-- [x] Model a polymorphic `Container` hierarchy using TPH (Inventory, Equipment)
-- [x] Understand the difference between item **instances** and item **types** (Container → Items is 1:many on `Item.ContainerId`)
-- [x] Use advanced LINQ (`Where`, `GroupBy`, `OrderBy`, `OfType<T>`, `Sum`, `FirstOrDefault`) on in-memory collections
-- [x] Implement inventory operations: pick up, equip, unequip, use, drop
-- [x] Move items between containers by updating a single foreign key (`Item.ContainerId`)
-- [x] Apply a seed data migration that runs a `.sql` script
-- [x] **Graded Task A:** Strongest Weapon (25 pts)
-- [x] **Graded Task B:** Total Value + GroupBy breakdown (25 pts)
+- [x] Extend a TPH hierarchy with new subclasses without changing existing rows
+- [x] Apply the Open/Closed Principle in a real EF Core model change
+- [x] Separate two concerns with two interfaces (`IItemContainer` + `ILockable`)
+- [x] Implement state-based logic (locked → unlocked, trapped → disarmed)
+- [x] Work with an `enum` return type to model multiple outcomes (`OpenResult`)
+- [x] Use LINQ `OfType<T>()` to query a TPH hierarchy by concrete type
+- [x] Write and run two migrations — one for schema, one for seed data
+- [x] **Graded Task A:** Richest Locked Chest (25 pts)
+- [x] **Graded Task B:** `Player.DisarmTrap` (25 pts)
 
 ---
 
@@ -41,46 +47,42 @@ The graded LINQ tasks (Strongest Weapon, Total Value + GroupBy breakdown) are wi
 
 | Template Approach | My Implementation | Reason |
 |-------------------|-------------------|--------|
-| `KeyItem` as its own `Item` TPH subclass | `Item.IsKeyItem` bool flag | W11 committed `IsKeyItem` as a bool on `Item`. Converting to a subclass would force re-keying the Items table and offers no structural advantage — key items behave like other items, they just can't be sold or dropped. The W11 decision stands. |
-| `Equipment` container holds items directly | `Equipment` container **owns `EquipmentSlot` rows**, which then reference items | W11 shipped slot-based equipping (MainHand / OffHand / Head / Chest / Legs / Feet / Hands). Ripping that out would reset W11 work for no benefit. `Equipment.Slots` replaces the flat item collection on the Equipment side and still satisfies the `IItemContainer` contract via the items-through-slots relationship. |
-| Container TPH replaces `EquipmentSlot` | **Additive:** Container TPH added; `EquipmentSlot` kept, now owned by `Equipment` | Keeps W11 investment; sets up W13 chests and W14 rooms-as-containers as siblings of Inventory/Equipment without further reshuffling. |
-| Intermediate abstract `Equipment` class under `Item` (W11) | Renamed to `DurableItem` in W12 | Avoid naming collision with the new `Containers.Equipment` class. No DB change — the W11 class was abstract and never a discriminator value. |
+| `KeyItem` as its own `Item` TPH subclass | `Item.IsKeyItem` bool + `Item.KeyId` nullable string | W12 committed `IsKeyItem` as a bool. Adding a TPH subclass would force re-keying the Items table. The same lockpick-vs-specific-key distinction is captured by `KeyId == null` (lockpick) vs `KeyId != null` (specific key). |
+| `Equipment.CanEquip` checks `Items.Any(...)` | `Equipment.CanEquip` checks `Slots.Any(...)` | W12 shipped slot-based equipping (`EquipmentSlot` rows owned by `Equipment`). The slot collection lets the invariant check the *specific* slot is empty, not just "no item with that EligibleSlot exists in the bag". More rigorous; preserves W11/W12 work. |
+| `Monster.LootId` (the template assumes a Monster class) | `Npc.LootId` + `MonsterLoot.IsLooted` | W11 already shipped Goblin as a `Race` rather than a Character TPH subclass. There is no Monster class — Grubnak is an `Npc` with `Race.Name = "Goblin"`. `IsLooted` lives on the loot container itself, not the NPC, keeping the NPC table clean and the loot state co-located with the loot. |
+| Lockpicking is a flat boolean (`IsPickable`) | Lockpicking is a Skill check (`Reflexes` + `CharacterSkill.Proficiency` vs `Chest.UnlockDC`) | LucentForge integration. The W11 `Skills` and `CharacterSkills` tables already exist; this gives them their first real consumer. Specific keys still bypass the roll, so the rubric path through W13 is preserved. |
 
 ---
 
-## What's New in W12
+## What's New in W13
 
 ### New files
 
 | Path | Purpose |
 |------|---------|
-| `ConsoleRpgEntities/Models/Containers/IItemContainer.cs` | Interface — Id, Name, Items, AddItem, RemoveItem |
-| `ConsoleRpgEntities/Models/Containers/Container.cs` | Abstract TPH base with `ItemsCollection` + `AddItem`/`RemoveItem` |
-| `ConsoleRpgEntities/Models/Containers/Inventory.cs` | `: Container` — `OwnerCharacterId`, `MaxWeight`, `CurrentWeight`, `CanFit` |
-| `ConsoleRpgEntities/Models/Containers/Equipment.cs` | `: Container` — `OwnerCharacterId`, `Slots` (EquipmentSlot collection) |
-| `ConsoleRpgEntities/Helpers/MigrationHelper.cs` | Reads SQL scripts from `Migrations/Scripts/` at migration-run time |
-| `ConsoleRpgEntities/Migrations/BaseMigration.cs` | Abstract `Migration` subclass that exposes `RunSqlScript` |
-| `ConsoleRpgEntities/Migrations/Scripts/W12_SeedInventoryData.sql` | Idempotent seed script (Races, Elara, containers, starter items, slots) |
-| `ConsoleRpgEntities/Migrations/Scripts/W12_SeedInventoryData.rollback.sql` | Tear-down script used by the migration's `Down()` |
-| `Docs/ASSIGNMENT_README.md` | Archived copy of the teacher's W12 template README |
+| `ConsoleRpgEntities/Models/Containers/ILockable.cs` | Interface — `IsLocked`, `IsTrapped`, `IsPickable`, `RequiredKeyId`, `TrapDamage`, `TrapDisarmed`, `UnlockDC` |
+| `ConsoleRpgEntities/Models/Containers/Chest.cs` | `: Container, ILockable` — adds `Description`, `RoomId`, `Room` nav |
+| `ConsoleRpgEntities/Models/Containers/MonsterLoot.cs` | `: Container` — adds `IsLooted` |
+| `ConsoleRpgEntities/Models/Containers/OpenResult.cs` | Enum — `Opened`, `Locked`, `Trapped`, `AlreadyOpen` |
+| `ConsoleRpgEntities/Migrations/Scripts/W13_SeedWorldContent.sql` | Idempotent seed: rooms, chests, Grubnak + loot, Lockpicking skill + Elara's proficiency, lockpicks |
+| `ConsoleRpgEntities/Migrations/Scripts/W13_SeedWorldContent.rollback.sql` | Tear-down used by `Down()` |
 
 ### Modified files
 
 | Path | Change |
 |------|--------|
-| `ConsoleRpgEntities/Models/Items/Item.cs` | + `ContainerId` (nullable int), + `Container` nav |
-| `ConsoleRpgEntities/Models/Items/DurableItem.cs` | Renamed from `Equipment.cs` (abstract, no DB change) |
-| `ConsoleRpgEntities/Models/Items/Weapon.cs`, `Armor.cs` | Inherit `DurableItem` instead of `Equipment` |
-| `ConsoleRpgEntities/Models/EquipmentSlot.cs` | + `EquipmentContainerId` + `EquipmentContainer` nav |
-| `ConsoleRpgEntities/Models/Character.cs` | + `Inventory?`, `Equipment?` navs; + `TypeName` helper (un-proxies lazy types) |
-| `ConsoleRpgEntities/Models/Player.cs` | + `PickUp`, `Drop`, `Equip`, `Unequip`, `UseItem`, `PickSlotFor`, `BodySlotToSlotType` |
-| `ConsoleRpgEntities/Data/GameContext.cs` | + `Containers` DbSet, Container TPH, 1:1 Character↔Inventory, 1:1 Character↔Equipment, 1:many Container→Items, 1:many Equipment→EquipmentSlots |
-| `ConsoleRpgEntities/Data/IContext.cs` | + `IEnumerable<Container> Containers` |
-| `ConsoleRpgEntities/ConsoleRpgEntities.csproj` | `Migrations/Scripts/*.sql` copied to output |
-| `ConsoleRpg/Services/GameEngine.cs` | `FindCharacter` → `SelectCharacter`, `_activeCharacter`, `TypeName` fix, Rooms list characters, `InventoryMenu` + graded LINQ |
-| `ConsoleRpg/UI/ConsoleGameUi.cs` + `IGameUi.cs` | Active-character header line; new "Inventory Management" menu option |
-| `ConsoleRpg/Program.cs` | Rewired menu for `SelectCharacter` + `InventoryMenu` |
-| `w10-efcore-tph.sln` → `w12-efcore-adv.sln` | Solution file renamed to match module |
+| `ConsoleRpgEntities/Models/Items/Item.cs` | + `KeyId` nullable string; + `EligibleSlot` virtual `[NotMapped]` |
+| `ConsoleRpgEntities/Models/Items/Weapon.cs` | + `EligibleSlot` override → `MainHand` |
+| `ConsoleRpgEntities/Models/Items/Armor.cs` | + `EligibleSlot` override → maps `BodySlot` to `SlotType` |
+| `ConsoleRpgEntities/Models/Containers/Equipment.cs` | + `CanEquip(item)` — slot-based invariant |
+| `ConsoleRpgEntities/Models/Npc.cs` | + `LootId` nullable int + `Loot` (MonsterLoot) nav |
+| `ConsoleRpgEntities/Models/Player.cs` | + `OpenChest`, `TryUnlock`, `DisarmTrap`, `LootChest`, `LootMonster` |
+| `ConsoleRpgEntities/Data/GameContext.cs` | + Chest/MonsterLoot discriminators, Chest→Room FK, Npc→MonsterLoot 1:1 |
+| `ConsoleRpg/Services/GameEngine.cs` | + `ChestMenu` + 7 sub-options including the two graded LINQ tasks |
+| `ConsoleRpg/UI/ConsoleGameUi.cs` | Welcome banner → W13; main menu adds option 15 |
+| `ConsoleRpg/Program.cs` | Wires option 15 → `ChestMenu` |
+| `w12-efcore-adv.sln` → `w13-chest-loot.sln` | Solution file renamed |
+| `ConsoleRpg/Properties/launchSettings.json` | Profile `w6-solid-dip` → `w13-chest-loot` |
 
 ---
 
@@ -88,104 +90,148 @@ The graded LINQ tasks (Strongest Weapon, Total Value + GroupBy breakdown) are wi
 
 | Principal | Dependent | Cardinality | FK | On Delete |
 |-----------|-----------|-------------|----|-----------|
-| `Character` | `Inventory` | 1 : 0..1 | `Inventory.OwnerCharacterId` | `ClientCascade` |
-| `Character` | `Equipment` | 1 : 0..1 | `Equipment.OwnerCharacterId` | `ClientCascade` |
-| `Container` | `Item` | 1 : many | `Item.ContainerId` (nullable) | `SetNull` |
-| `Equipment` | `EquipmentSlot` | 1 : many | `EquipmentSlot.EquipmentContainerId` | `Cascade` |
+| `Container` | (Chest discriminator) | TPH | `ContainerType = 'Chest'` | n/a |
+| `Container` | (MonsterLoot discriminator) | TPH | `ContainerType = 'MonsterLoot'` | n/a |
+| `Room` | `Chest` | 1 : many | `Chest.RoomId` (nullable) | `SetNull` |
+| `Npc` | `MonsterLoot` | 1 : 0..1 | `Npc.LootId` (nullable) | `SetNull` |
 
-> Why `ClientCascade` on the Character↔Container FKs: SQL Server rejects two cascade paths from the same principal table. EF Core handles the cascade client-side when the Character is tracked, which is how the app accesses containers anyway (via lazy-loaded navs).
-
-### Empty/null tolerance (design principle)
-
-Every container relationship tolerates both empty *and* null:
-
-- **Empty is normal.** `Container.ItemsCollection` starts as `new List<Item>()`; a Container with zero items is valid.
-- **Character-side is nullable.** `Character.Inventory?` and `Character.Equipment?` — a character can exist before being given a backpack or gear.
-- **Item-side is nullable.** `Item.ContainerId` is `int?`. Items can float (orphaned during a move, or dropped in an unpopulated room before W14).
-- **Future chests (W13) and rooms-as-containers (W14)** will be their own Container subclasses — no `OwnerCharacterId` at all, so "no owner" is the shape of those subclasses.
+The `ContainerType` discriminator now has four values (Inventory, Equipment,
+Chest, MonsterLoot). Adding the two W13 values is a five-line change to
+`OnModelCreating` — that's the OCP payoff.
 
 ---
 
 ## Graded LINQ Tasks
 
-### Task A — Strongest Weapon
+### Task A — Richest Locked Chest
 
 ```csharp
-var strongest = _activePlayer.Inventory.ItemsCollection
-    .OfType<Weapon>()
-    .OrderByDescending(w => w.AttackPower)
+var richest = _dbContext.Containers
+    .OfType<Chest>()
+    .Where(c => c.IsLocked)
+    .OrderByDescending(c => c.ItemsCollection.Sum(i => i.Value))
     .FirstOrDefault();
 ```
 
-With Elara's seeded kit (Rusty Sword AP=7, Oak Bow AP=9), this returns **Oak Bow — Attack 9 (Bow)**.
+With seeded chests, the Iron-Banded Chest (Silvered Shortsword 65g + Leather
+Bracers 25g = **90g**) wins until you find the Dungeon Key on Grubnak — at
+which point unlocking the Ornate Rune-Engraved Chest (~770g) takes it out of
+the locked set.
 
-### Task B — Total Value + GroupBy breakdown
+### Task B — `Player.DisarmTrap(chest, lockpick)`
 
 ```csharp
-int total = items.Sum(i => i.Value);
-var breakdown = items
-    .GroupBy(i => i.TypeNameForItem())
-    .Select(g => new { Type = g.Key, Gold = g.Sum(i => i.Value), Count = g.Count() })
-    .OrderByDescending(x => x.Gold)
-    .ToList();
+public bool DisarmTrap(Chest chest, Item lockpick)
+{
+    if (!lockpick.IsKeyItem || lockpick.KeyId is not null) return false;
+    if (!chest.IsTrapped || chest.TrapDisarmed) return false;
+
+    chest.TrapDisarmed = true;
+    Inventory?.RemoveItem(lockpick);
+    return true;
+}
 ```
 
-Output format:
-
-```
---- Inventory Value ---
-  Total: 150g across 7 items
-  By type:
-    Armor         2 items      60g
-    Weapon        2 items      45g
-    Consumable    3 items      45g
-```
+Lockpick-only (`IsKeyItem && KeyId == null`), trapped-chests-only,
+`TrapDisarmed = true` on success, lockpick consumed. Wired into the Chest
+Interaction submenu so the player can defuse the Dusty Humming Chest before
+opening it (otherwise `OpenChest` fires the trap for 8 damage).
 
 ---
 
-## Migration: `W12_InventoryAndSeed`
+## LucentForge Integration (scoped)
 
-Single migration handles both schema *and* seed:
+The single integration this week: **lockpicking is a real skill check.**
 
-1. **Schema (`Up`):**
-   - Adds `Items.ContainerId` (nullable FK → Containers, OnDelete SetNull)
-   - Adds `EquipmentSlots.EquipmentContainerId` (nullable FK → Containers, OnDelete Cascade)
-   - Creates `Containers` table (Id, Name, ContainerType discriminator, OwnerCharacterId, Inventory_OwnerCharacterId, MaxWeight)
-   - Adds indexes + FK constraints
+- Seed adds a `Lockpicking` skill row (`PrimaryAttribute = Reflexes`) and
+  Elara's `CharacterSkill` row with `Proficiency = 3`.
+- `Player.TryUnlock` lockpick branch rolls `1d20 + Reflexes + Proficiency`
+  vs. `Chest.UnlockDC`. Lockpick is consumed regardless. Specific keys
+  (`KeyId != null`) bypass the roll entirely.
+- Chest 2 (`UnlockDC = 12`) is reachable for Elara (Reflexes 7 + Proficiency 3 = 10
+  before the d20 — needs ≥2 on the die). Chest 3 (`UnlockDC = 99`) is
+  effectively unpickable; only the Dungeon Key opens it.
 
-2. **Seed (`Up` — after schema):** calls `RunSqlScript(migrationBuilder, "W12_SeedInventoryData.sql")` which:
-   - Inserts 10 Races (3 Playable: Human/Elf/Dwarf, 7 Monster: Goblin/Orc/Troll/Mimic/Slime/Chimera/Kobold)
-   - Inserts Elara the Bold (Player, Human, Level 1) + her Stats + Resources
-   - Inserts her `Inventory` (MaxWeight 100) and `Equipment` containers
-   - Inserts starter items: Rusty Sword, Oak Bow, Leather Helm, Leather Tunic, Healing Potion, Stamina Draught, Old Brass Key (IsKeyItem=1)
-   - Inserts one `EquipmentSlot` per `SlotType` (MainHand, OffHand, Head, Chest, Legs, Feet, Hands), all empty
+Magic-warded chests, combat resolution before `LootMonster`, and race-driven
+modifiers are *not* part of W13 — those land in a separate W14/W15 plan
+(see the Caelum framework's `projects/` directory).
 
-All inserts are guarded with `NOT EXISTS` checks against stable Names, so the migration is idempotent — safe to re-run against a shared DB.
+---
 
-3. **`Down`** runs `W12_SeedInventoryData.rollback.sql` first (removes Elara's rows in reverse FK order), then drops the schema.
+## Carry-forward polish (from the W11 → W12 follow-up list)
+
+- **Item 4 (active-character forcing):** Chest interaction is `Player`-only and
+  routes through `ResolveActivePlayer()`, which prompts for selection if no
+  active character is set.
+- **Item 7 (M:M join doc for grader):** documented below in the *M:M Join
+  Tables* appendix.
+
+(Item 6 — Consumable Effect/Potency help text — was not addressed this module.)
+
+---
+
+## Migrations
+
+### `W13_AddChestsAndMonsterLoot` (schema)
+
+Pure additive — the `Containers` table gains 9 new columns
+(`Description`, `IsLocked`, `IsTrapped`, `IsPickable`, `RequiredKeyId`,
+`TrapDamage`, `TrapDisarmed`, `UnlockDC`, `RoomId`, `IsLooted`), all nullable
+because they only apply to specific TPH subclasses. `Items` gains `KeyId`
+(nullable). `Characters` gains `LootId` (nullable, unique-filtered FK to
+Containers). No existing column types or rows are touched.
+
+### `W13_SeedWorldContent` (data)
+
+Runs `Migrations/Scripts/W13_SeedWorldContent.sql` via the W12 `BaseMigration`
++ `MigrationHelper.RunSqlScript` plumbing. Seeds:
+
+- **Rooms:** Antechamber, Vault. Elara is moved to the Antechamber if she has no room.
+- **Skill:** `Lockpicking` (PrimaryAttribute = Reflexes) + Elara's `CharacterSkill` proficiency.
+- **Chests (4):**
+  - *Weathered Wooden Chest* — open, contains `Lesser Healing Draught`, `Rusty Dagger`
+  - *Iron-Banded Chest* — locked (`UnlockDC = 12`, pickable), `Silvered Shortsword`, `Leather Bracers`
+  - *Ornate Rune-Engraved Chest* — locked, NOT pickable, `RequiredKeyId = "dungeon-main"`, `Ember Wand`, `Mithril Chainmail`, `Elixir of the Wakeful`
+  - *Dusty Humming Chest* — trapped (`TrapDamage = 8`), `Trapmaker's Dagger`, `Antidote`
+- **Grubnak the Goblin (Npc):** placed in the Vault, with a `MonsterLoot`
+  container holding `Goblin Cleaver`, `Dungeon Key` (KeyId = `dungeon-main`),
+  `Gobbo's Stew`. Treated as already-defeated per the W13 cosmetic-loot
+  decision — combat lands in a later module.
+- **Lockpicks:** two `Iron Lockpick` consumables seeded into Elara's inventory.
+
+Every insert is guarded with `NOT EXISTS` keyed on stable Names — safe to
+re-run against the shared DB.
 
 ---
 
 ## Running the Game
 
 ```
-14. Inventory Management       ← new W12 submenu
-  1. List items (with weight)
-  2. Search by name
-  3. Group by type
-  4. Sort items
-  5. Equip item from inventory
-  6. Unequip item
-  7. Use consumable
-  8. Strongest weapon (graded)
-  9. Total value + breakdown (graded)
+15. Chest Interaction          ← new W13 submenu
+  1. List chests in current room
+  2. Open chest
+  3. Try unlock chest (key or lockpick)
+  4. Disarm trap (lockpick) — graded
+  5. Loot chest
+  6. Loot defeated monster
+  7. Richest locked chest (graded)
   0. Back to main menu
 ```
 
-Flow:
-1. From the main menu, choose **2. Select Character** and enter `Elara` (the active-character header then reads `[Active: Elara the Bold (Player)]`).
-2. Choose **14. Inventory Management** — the submenu only enables when the active character is a `Player` with an `Inventory` container.
-3. All options operate on `_activePlayer.Inventory.ItemsCollection` in memory; **8** and **9** are the graded LINQ tasks.
+Suggested walkthrough:
+
+1. **Select Character** → `Elara`. (Active header shows `[Active: Elara the Bold (Player)]`.)
+2. **Chest Interaction → 1.** Lists the 2 chests in the Antechamber.
+3. **Chest Interaction → 2** on the Wooden Chest → opens trivially.
+4. **Chest Interaction → 3** on the Iron-Banded Chest with a lockpick → skill check.
+   On success, **5.** loots the silvered sword + bracers.
+5. **Move Player** → North/whatever exit leads to the Vault. (Or seed-add a door later.)
+6. **Chest Interaction → 4** on the Dusty Humming Chest with a lockpick → trap disarmed.
+   Then **2** to open, then **5** to loot.
+7. **Chest Interaction → 6** on Grubnak → looted; gain the Dungeon Key.
+8. **Chest Interaction → 3** on the Ornate Chest using the Dungeon Key → unlocks.
+   **5** to loot the Ember Wand + Mithril Chainmail + Elixir.
+9. **Chest Interaction → 7** at any point shows the richest locked chest still standing.
 
 ---
 
@@ -193,40 +239,57 @@ Flow:
 
 | Criterion | Weight | Status | Notes |
 |-----------|--------|--------|-------|
-| Container TPH (Inventory + Equipment) with `Item.ContainerId` FK | required | ✅ | `Container` abstract + 2 subclasses; `Items.ContainerId` nullable FK with SetNull |
-| Player instance methods (PickUp/Drop/Equip/Unequip/UseItem) | required | ✅ | All five present; operate on `Inventory`/`Equipment` navs |
-| Inventory sub-menu with LINQ ops (Where/GroupBy/OrderBy/OfType/Sum) | required | ✅ | 9-option submenu; every required LINQ operator used |
-| Graded Task A: Strongest Weapon | 25 pts | ✅ | `OfType<Weapon>().OrderByDescending(w => w.AttackPower).FirstOrDefault()` |
-| Graded Task B: Total Value + breakdown | 25 pts | ✅ | `Sum` + `GroupBy` + `Select` projection with ordered output |
-| Seed migration via `.sql` script | required | ✅ | `W12_InventoryAndSeed` + `MigrationHelper` + `BaseMigration` + `Migrations/Scripts/*.sql` copied to output |
-| Weight limit UX (stretch) | +10 pts | ✅ | `Inventory.CurrentWeight`/`CanFit`; inventory list shows `X / MaxWeight lbs` |
-| **Target** |  | **100 + 10 stretch** |  |
+| Migrations Run Cleanly | 15 | ✅ | Both migrations applied to `w9_efcore_SDunn` with no errors |
+| Understands the OCP Pattern | 15 | ✅ | New discriminators added; W11/W12 code untouched. See *Design Deviations* |
+| Understands `ILockable` Separation | 10 | ✅ | `MonsterLoot` deliberately omits `ILockable`. Chest implements both. ISP discussed in *Overview* |
+| Task A: Richest Chest LINQ | 25 | ✅ | `OfType<Chest>().Where(...).OrderByDescending(c => c.Items.Sum(...)).FirstOrDefault()` |
+| Task B: `DisarmTrap` Method | 25 | ✅ | Lockpick-only, trapped-only, consumes lockpick, integrates with chest flow |
+| Code Quality | 10 | ✅ | Matches W11/W12 patterns; lazy-loading proxies, virtual nav properties, no `Include()` calls |
+| **Target** |  | **100** |  |
+| Stretch: Drop Tables | +10 | ⚪ | Deferred — Grubnak's loot is hardcoded for W13. Drop tables are a natural W14/W15 fit once combat lands |
 
 ---
 
-## LucentForge Bible Alignment
+## M:M Join Tables (grader appendix)
 
-The Container pattern introduced here is the foundation for:
+The `Character` ↔ `Ability` and `Character` ↔ `Magic` relationships use the
+EF Core "skip navigation" pattern. The shadow join tables are configured in
+`GameContext.OnModelCreating`:
 
-- **W13** — Chests as a third `Container` subclass (no `OwnerCharacterId`; room-attached), monster loot drops become chests that spawn on death.
-- **W14** — Rooms-as-containers. `Room` will gain a `RoomContainer` child so dropped items in a room are actually in a container, not floating with `ContainerId = NULL`.
-- **W15+** — Crafting stations and merchant stock as further Container subclasses.
+```csharp
+modelBuilder.Entity<Character>()
+    .HasMany(c => c.Abilities)
+    .WithMany(a => a.Characters)
+    .UsingEntity(j => j.ToTable("CharacterAbilities"));
 
-By building Container TPH cleanly this week — additive to EquipmentSlot, with nullable owner FKs and a settled empty/null stance — the rest of the semester should be subclass extensions, not re-architecture.
+modelBuilder.Entity<Character>()
+    .HasMany(c => c.Magics)
+    .WithMany(m => m.Characters)
+    .UsingEntity(j => j.ToTable("CharacterMagic"));
+```
+
+The `Character` ↔ `Skill` relationship is an *explicit* join entity
+(`CharacterSkill`) because it carries a payload (`Proficiency`). That's the
+table the W13 LucentForge integration writes to when seeding Elara's
+Lockpicking skill row.
 
 ---
 
-## Known Issues / Follow-up
+## How This Connects to W14+
 
-- The scaffolded Container table has both `OwnerCharacterId` and `Inventory_OwnerCharacterId` columns (EF Core disambiguated the same-named property on two TPH subclasses). Only one is populated per row, gated by discriminator. This is cosmetic, not functional.
-- `DisplayCurrentRoom` and `MovePlayer` still pick "any Player" via `OfType<Player>()` when `_activeCharacter` isn't set, then prompt. A cleaner follow-up would force selection up front.
-- Inventory menu does not yet support "pick up from room" or "drop to room" — W14 territory, when rooms become containers.
+| Week | What gets added | What carries over from W13 |
+|------|-----------------|----------------------------|
+| **W14** | `Room` may grow into another Container subclass; `Door` implements `ILockable` | `Player.TryUnlock` already handles ILockable — W14 reuses it on doors. The lockpick skill check ports directly. |
+| **W15+** | Combat resolution; magic-warded chests via spell cost; race-flavored loot rules | The `OpenResult` enum will gain `Warded`/`Resisted`. `MonsterLoot.IsLooted` will be set by the combat system instead of a menu choice. |
 
 ---
 
 ## Verification Steps
 
-1. `dotnet build w12-efcore-adv.sln` — 0 warnings, 0 errors
-2. `dotnet ef database update --project ConsoleRpgEntities --startup-project ConsoleRpg` — migration applies cleanly
-3. SSMS: `SELECT COUNT(*) FROM Races` → 10; `SELECT * FROM Containers` → 2 rows for Elara; `SELECT * FROM Items WHERE ContainerId IS NOT NULL` → starter kit
-4. App walkthrough: Select Elara → Inventory Management → all 9 options produce expected output
+1. `dotnet build w13-chest-loot.sln --configuration Release` — 0 warnings, 0 errors
+2. `dotnet ef database update --project ConsoleRpgEntities --startup-project ConsoleRpg` — both migrations apply cleanly
+3. SSMS:
+   - `SELECT ContainerType, COUNT(*) FROM Containers GROUP BY ContainerType` → Inventory, Equipment, Chest, MonsterLoot rows
+   - `SELECT Name, KeyId FROM Items WHERE IsKeyItem = 1` → Old Brass Key (NULL), Dungeon Key (`dungeon-main`), Iron Lockpick #1/#2 (NULL)
+   - `SELECT * FROM CharacterSkills cs JOIN Skills s ON cs.SkillId = s.Id WHERE s.Name = 'Lockpicking'` → Elara, Proficiency 3
+4. App walkthrough: follow the *Running the Game* sequence above; observe richest-chest output before and after looting the Ornate Chest.

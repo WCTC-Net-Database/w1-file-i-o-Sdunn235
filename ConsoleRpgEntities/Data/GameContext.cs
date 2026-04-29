@@ -101,7 +101,23 @@ public class GameContext : DbContext, IContext
         modelBuilder.Entity<Container>()
             .HasDiscriminator<string>("ContainerType")
             .HasValue<Inventory>("Inventory")
-            .HasValue<Equipment>("Equipment");
+            .HasValue<Equipment>("Equipment")
+            .HasValue<Chest>("Chest")           // W13
+            .HasValue<MonsterLoot>("MonsterLoot"); // W13
+
+        // W13 — Chest → Room (many-to-one, nullable)
+        modelBuilder.Entity<Chest>()
+            .HasOne(c => c.Room)
+            .WithMany()
+            .HasForeignKey(c => c.RoomId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // W13 — Npc → MonsterLoot (one-to-one, nullable)
+        modelBuilder.Entity<Npc>()
+            .HasOne(n => n.Loot)
+            .WithOne()
+            .HasForeignKey<Npc>(n => n.LootId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // Container → Items (one-to-many, nullable: items can float)
         modelBuilder.Entity<Container>()

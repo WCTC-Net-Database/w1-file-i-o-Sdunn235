@@ -6,8 +6,8 @@ public class ConsoleGameUi : IGameUi
     {
         Console.Clear();
         Console.WriteLine("╔══════════════════════════════════════════╗");
-        Console.WriteLine("║       W12 Console RPG — LucentForge     ║");
-        Console.WriteLine("║   Inventory, Containers & Advanced LINQ ║");
+        Console.WriteLine("║       W13 Console RPG — LucentForge     ║");
+        Console.WriteLine("║      Chests, Monster Loot & Lockpicks   ║");
         Console.WriteLine("╚══════════════════════════════════════════╝");
         Console.WriteLine();
     }
@@ -41,6 +41,8 @@ public class ConsoleGameUi : IGameUi
         Console.WriteLine("13. Add Item");
         Console.WriteLine("--- Inventory (Player) ---");
         Console.WriteLine("14. Inventory Management");
+        Console.WriteLine("--- Chests & Loot (Player, W13) ---");
+        Console.WriteLine("15. Chest Interaction");
         Console.WriteLine(" 0. Exit");
         Console.Write("\nEnter choice: ");
         return Console.ReadLine()?.Trim() ?? string.Empty;

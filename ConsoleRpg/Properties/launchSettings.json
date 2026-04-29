@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "w6-solid-dip": {
+    "w13-chest-loot": {
       "commandName": "Project",
       "workingDirectory": "$(ProjectDir)",
       "environmentVariables": {

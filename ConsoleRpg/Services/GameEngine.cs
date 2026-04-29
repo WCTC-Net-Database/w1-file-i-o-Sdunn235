@@ -736,6 +736,213 @@ public class GameEngine
         foreach (var b in breakdown)
             Console.WriteLine($"    {b.Type,-12} {b.Count,3} items   {b.Gold,6}g");
     }
+
+    // -------------------------------------------------------------------------
+    // W13 — Chest & Monster Loot Interaction (Player only)
+    // -------------------------------------------------------------------------
+
+    public void ChestMenu()
+    {
+        var player = ResolveActivePlayer();
+        if (player is null) return;
+
+        while (true)
+        {
+            Console.WriteLine($"\n=== Chest Interaction — {player.Name} ===");
+            Console.WriteLine("  1. List chests in current room");
+            Console.WriteLine("  2. Open chest");
+            Console.WriteLine("  3. Try unlock chest (key or lockpick)");
+            Console.WriteLine("  4. Disarm trap (lockpick) — graded");
+            Console.WriteLine("  5. Loot chest");
+            Console.WriteLine("  6. Loot defeated monster");
+            Console.WriteLine("  7. Richest locked chest (graded)");
+            Console.WriteLine("  0. Back to main menu");
+            Console.Write("Choice: ");
+            var choice = Console.ReadLine()?.Trim();
+
+            switch (choice)
+            {
+                case "1": ChestList(player); break;
+                case "2": ChestOpen(player); break;
+                case "3": ChestTryUnlock(player); break;
+                case "4": ChestDisarmTrap(player); break;
+                case "5": ChestLoot(player); break;
+                case "6": ChestLootMonster(player); break;
+                case "7": ChestRichestLocked(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid choice."); break;
+            }
+        }
+    }
+
+    private List<Chest> ChestsInPlayerRoom(Player player) =>
+        _dbContext.Containers
+            .OfType<Chest>()
+            .Where(c => c.RoomId == player.RoomId)
+            .ToList();
+
+    private void ChestList(Player player)
+    {
+        if (player.RoomId is null) { Console.WriteLine("\nPlayer is not in a room."); return; }
+
+        var chests = ChestsInPlayerRoom(player);
+        Console.WriteLine($"\n--- Chests in {player.Room?.Name ?? "this room"} ({chests.Count}) ---");
+        if (!chests.Any()) { Console.WriteLine("  (none)"); return; }
+
+        foreach (var c in chests)
+        {
+            string state = (c.IsLocked, c.IsTrapped && !c.TrapDisarmed) switch
+            {
+                (true, true)   => "[LOCKED, TRAPPED]",
+                (true, false)  => "[LOCKED]",
+                (false, true)  => "[TRAPPED]",
+                _              => "[OPEN]"
+            };
+            Console.WriteLine($"  [{c.Id}] {c.Name} {state} — {c.Description}");
+        }
+    }
+
+    private Chest? PromptForChest(Player player)
+    {
+        var chests = ChestsInPlayerRoom(player);
+        if (!chests.Any()) { Console.WriteLine("\nNo chests in this room."); return null; }
+
+        Console.Write("Chest ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var chest = chests.FirstOrDefault(c => c.Id == id);
+        if (chest is null) Console.WriteLine("Not in this room.");
+        return chest;
+    }
+
+    private void ChestOpen(Player player)
+    {
+        var chest = PromptForChest(player);
+        if (chest is null) return;
+
+        var result = player.OpenChest(chest);
+        switch (result)
+        {
+            case OpenResult.Opened:
+                Console.WriteLine($"\nThe {chest.Name} opens. {chest.ItemsCollection.Count} item(s) inside.");
+                break;
+            case OpenResult.Locked:
+                Console.WriteLine($"\nThe {chest.Name} is locked. Try option 3 to unlock.");
+                break;
+            case OpenResult.Trapped:
+                Console.WriteLine($"\nA trap fires! {chest.Name} deals {chest.TrapDamage} damage. " +
+                                  $"HP now {player.Resources?.Hp ?? 0}/{player.Resources?.MaxHp ?? 0}.");
+                _dbContext.SaveChanges();
+                break;
+            case OpenResult.AlreadyOpen:
+                Console.WriteLine($"\nThe {chest.Name} was already open.");
+                break;
+        }
+    }
+
+    private void ChestTryUnlock(Player player)
+    {
+        var chest = PromptForChest(player);
+        if (chest is null) return;
+        if (!chest.IsLocked) { Console.WriteLine("\nNot locked."); return; }
+        if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
+
+        var keys = player.Inventory.ItemsCollection.Where(i => i.IsKeyItem).ToList();
+        if (!keys.Any()) { Console.WriteLine("\nNo keys or lockpicks in inventory."); return; }
+
+        Console.WriteLine("\n--- Keys & Lockpicks ---");
+        foreach (var k in keys)
+        {
+            string label = k.KeyId is null ? "(lockpick)" : $"(key: {k.KeyId})";
+            Console.WriteLine($"  [{k.Id}] {k.Name} {label}");
+        }
+
+        Console.Write("Item ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return; }
+        var key = keys.FirstOrDefault(k => k.Id == id);
+        if (key is null) { Console.WriteLine("Not in keys list."); return; }
+
+        bool ok = player.TryUnlock(chest, key);
+        _dbContext.SaveChanges();
+        if (ok)
+            Console.WriteLine($"\n{chest.Name} clicks open.");
+        else if (key.KeyId is null)
+            Console.WriteLine($"\nThe lockpick snaps. {chest.Name} stays shut.");
+        else
+            Console.WriteLine($"\nThat key doesn't fit {chest.Name}.");
+    }
+
+    private void ChestDisarmTrap(Player player)
+    {
+        var chest = PromptForChest(player);
+        if (chest is null) return;
+        if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
+
+        var lockpick = player.Inventory.ItemsCollection
+            .FirstOrDefault(i => i.IsKeyItem && i.KeyId is null);
+        if (lockpick is null) { Console.WriteLine("\nNo lockpick available."); return; }
+
+        bool ok = player.DisarmTrap(chest, lockpick);
+        _dbContext.SaveChanges();
+        Console.WriteLine(ok
+            ? $"\nTrap on {chest.Name} disarmed. Lockpick used."
+            : $"\nCouldn't disarm — chest isn't trapped, or already disarmed, or item isn't a lockpick.");
+    }
+
+    private void ChestLoot(Player player)
+    {
+        var chest = PromptForChest(player);
+        if (chest is null) return;
+        if (chest.IsLocked) { Console.WriteLine("\nLocked. Unlock first."); return; }
+
+        int moved = player.LootChest(chest);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"\nLooted {moved} item(s) from {chest.Name}.");
+    }
+
+    private void ChestLootMonster(Player player)
+    {
+        if (player.RoomId is null) { Console.WriteLine("\nPlayer is not in a room."); return; }
+
+        var monsters = _dbContext.Characters
+            .OfType<Npc>()
+            .Where(n => n.RoomId == player.RoomId && n.LootId != null)
+            .ToList();
+
+        if (!monsters.Any()) { Console.WriteLine("\nNo defeated monsters here to loot."); return; }
+
+        Console.WriteLine("\n--- Defeated monsters here ---");
+        foreach (var m in monsters)
+        {
+            string status = m.Loot?.IsLooted == true ? "(already looted)" : "(unlooted)";
+            Console.WriteLine($"  [{m.Id}] {m.Name} ({m.Race?.Name}) {status}");
+        }
+
+        Console.Write("Monster ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return; }
+        var monster = monsters.FirstOrDefault(m => m.Id == id);
+        if (monster is null) { Console.WriteLine("Not in this room."); return; }
+
+        int moved = player.LootMonster(monster);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"\nLooted {moved} item(s) from {monster.Name}.");
+    }
+
+    // ---- Graded LINQ Task A: Richest locked chest ----
+    private void ChestRichestLocked()
+    {
+        var richest = _dbContext.Containers
+            .OfType<Chest>()
+            .Where(c => c.IsLocked)
+            .OrderByDescending(c => c.ItemsCollection.Sum(i => i.Value))
+            .FirstOrDefault();
+
+        Console.WriteLine("\n--- Richest Locked Chest ---");
+        if (richest is null) { Console.WriteLine("  No locked chests."); return; }
+
+        int gold = richest.ItemsCollection.Sum(i => i.Value);
+        Console.WriteLine($"  {richest.Name} — {gold}g across {richest.ItemsCollection.Count} item(s)");
+        Console.WriteLine($"  ({richest.Description})");
+    }
 }
 
 // -- small local extension to get the un-proxied item TPH type name --

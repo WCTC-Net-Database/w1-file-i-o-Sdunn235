@@ -59,6 +59,11 @@ while (running)
             Startup.GameEngine.InventoryMenu();
             break;
 
+        // Chest Interaction (W13)
+        case "15":
+            Startup.GameEngine.ChestMenu();
+            break;
+
         case "0":
             running = false;
             Startup.GameUi.DisplayMessage("Goodbye, adventurer!");
