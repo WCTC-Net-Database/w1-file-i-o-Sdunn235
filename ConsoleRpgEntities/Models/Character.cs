@@ -37,7 +37,7 @@ public abstract class Character
 
     public int DeriveMaxHp() => 50 + (Stats?.Constitution ?? 0) * 5;
     public int DeriveMaxSp() => 30 + (Stats?.Constitution ?? 0) * 3 + (Stats?.Reflexes ?? 0) * 2;
-    public int DeriveMaxBp() => 20 + (Stats?.Intuition ?? 0) * 4;
+    public int DeriveMaxBitPool() => 20 + (Stats?.Intuition ?? 0) * 4;
     public int DeriveMaxBytePool() => 10 + (Stats?.Intellect ?? 0) * 3;
 
     // --- Combat helpers ---

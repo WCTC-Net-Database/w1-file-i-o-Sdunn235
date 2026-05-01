@@ -73,7 +73,8 @@ public class Player : Character
                 Resources.Sp = Math.Min(Resources.MaxSp, Resources.Sp + item.Potency);
                 break;
             case "bp":
-                Resources.Bp = Math.Min(Resources.MaxBp, Resources.Bp + item.Potency);
+            case "bitpool":
+                Resources.BitPool = Math.Min(Resources.MaxBitPool, Resources.BitPool + item.Potency);
                 break;
             case "bytepool":
                 Resources.BytePool = Math.Min(Resources.MaxBytePool, Resources.BytePool + item.Potency);

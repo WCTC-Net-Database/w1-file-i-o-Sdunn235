@@ -1,10 +1,13 @@
 using ConsoleRpg.UI;
 using ConsoleRpgEntities.Data;
 using ConsoleRpgEntities.Models;
+using ConsoleRpgEntities.Models.Abilities;
 using ConsoleRpgEntities.Models.Containers;
 using ConsoleRpgEntities.Models.Enums;
 using ConsoleRpgEntities.Models.Items;
 using ConsoleRpgEntities.Models.Races;
+using ConsoleRpgEntities.Models.Skills;
+using MagicEntity = ConsoleRpgEntities.Models.Magic.Magic;
 
 namespace ConsoleRpg.Services;
 
@@ -32,31 +35,41 @@ public class GameEngine
     //      only legal entry point.
     public void EnsureCharacterIntegrity()
     {
+        // Materialize everything up-front. With lazy-loading proxies + a single
+        // active DataReader, comparisons like `c.Stats == null` mid-enumeration
+        // throw "There is already an open DataReader" — so we pull each set
+        // fully into memory and compare via projected ID lookups instead.
+
         // 1. Backfill missing Stats rows.
-        var orphans = _dbContext.Characters.Where(c => c.Stats == null).ToList();
+        var characters = _dbContext.Characters.ToList();
+        var statsCharacterIds = _dbContext.Stats.Select(s => s.CharacterId).ToHashSet();
+
+        var orphans = characters.Where(c => !statsCharacterIds.Contains(c.Id)).ToList();
         foreach (var c in orphans)
             _dbContext.AddEntity(new Stats { CharacterId = c.Id });
         if (orphans.Count > 0)
             _dbContext.SaveChanges();
 
-        // 2. Sweep EquipmentSlots for slot/item mismatches.
-        int slotsCleared = 0;
+        // 2. Sweep EquipmentSlots for slot/item mismatches. Pull all items
+        // first so we can resolve EquippedItemId without triggering proxy loads.
         var slots = _dbContext.EquipmentSlots
             .Where(s => s.EquippedItemId != null)
             .ToList();
+        var itemsById = _dbContext.Items.ToList().ToDictionary(i => i.Id);
 
+        int slotsCleared = 0;
         foreach (var slot in slots)
         {
-            var item = slot.EquippedItem;
-            if (item is null) continue;
+            if (slot.EquippedItemId is not int itemId) continue;
+            if (!itemsById.TryGetValue(itemId, out var item)) continue;
 
-            // Shield items can occupy MainHand or OffHand (handled in Shield class).
-            // Everything else: EligibleSlot must equal the slot's SlotType, else clear.
-            var eligible = item.EligibleSlot;
-            bool valid = eligible.HasValue && eligible.Value == slot.Slot;
-
-            if (item is Shield && (slot.Slot == SlotType.MainHand || slot.Slot == SlotType.OffHand))
-                valid = true;
+            // Shields are valid in either MainHand or OffHand.
+            // Everything else: EligibleSlot must equal the slot's SlotType.
+            bool valid;
+            if (item is Shield)
+                valid = slot.Slot == SlotType.MainHand || slot.Slot == SlotType.OffHand;
+            else
+                valid = item.EligibleSlot.HasValue && item.EligibleSlot.Value == slot.Slot;
 
             if (!valid)
             {
@@ -212,7 +225,7 @@ public class GameEngine
             CharacterId = character.Id,
             Hp = character.DeriveMaxHp(), MaxHp = character.DeriveMaxHp(),
             Sp = character.DeriveMaxSp(), MaxSp = character.DeriveMaxSp(),
-            Bp = character.DeriveMaxBp(), MaxBp = character.DeriveMaxBp(),
+            BitPool = character.DeriveMaxBitPool(), MaxBitPool = character.DeriveMaxBitPool(),
             BytePool = character.DeriveMaxBytePool(), MaxBytePool = character.DeriveMaxBytePool()
         };
         _dbContext.AddEntity(resources);
@@ -599,10 +612,14 @@ public class GameEngine
         {
             var r = character.Resources;
             Console.WriteLine($"\n  --- Resources ---");
-            Console.WriteLine($"  HP: {r.Hp}/{r.MaxHp} (derived max: {character.DeriveMaxHp()})");
-            Console.WriteLine($"  SP: {r.Sp}/{r.MaxSp} (derived max: {character.DeriveMaxSp()})");
-            Console.WriteLine($"  BP: {r.Bp}/{r.MaxBp} (derived max: {character.DeriveMaxBp()})");
-            Console.WriteLine($"  BytePool: {r.BytePool}/{r.MaxBytePool} (derived max: {character.DeriveMaxBytePool()})");
+            int maxHp = character.DeriveMaxHp();
+            int maxSp = character.DeriveMaxSp();
+            int maxBit = character.DeriveMaxBitPool();
+            int maxByte = character.DeriveMaxBytePool();
+            Console.WriteLine($"  HP: {Math.Min(r.Hp, maxHp)}/{maxHp}");
+            Console.WriteLine($"  SP: {Math.Min(r.Sp, maxSp)}/{maxSp}");
+            Console.WriteLine($"  BitPool: {Math.Min(r.BitPool, maxBit)}/{maxBit}");
+            Console.WriteLine($"  BytePool: {Math.Min(r.BytePool, maxByte)}/{maxByte}");
         }
 
         Console.WriteLine($"\n  Attack: {character.GetTotalAttack()} | Defense: {character.GetTotalDefense()}");
@@ -618,7 +635,7 @@ public class GameEngine
         {
             Console.WriteLine($"\n  --- Magic ---");
             foreach (var m in character.Magics)
-                Console.WriteLine($"  {m.Name} ({m.Element}) Power: {m.Power}, BP: {m.BpCost}, Bytes: {m.BytePoolCost}");
+                Console.WriteLine($"  {m.Name} ({m.Element}) Power: {m.Power}, BitPool: {m.BitPoolCost}, Bytes: {m.BytePoolCost}");
         }
 
         if (character.CharacterSkills.Any())
@@ -1320,6 +1337,647 @@ public class GameEngine
         int gold = richest.ItemsCollection.Sum(i => i.Value);
         Console.WriteLine($"  {richest.Name} — {gold}g across {richest.ItemsCollection.Count} item(s)");
         Console.WriteLine($"  ({richest.Description})");
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase 1 reshape — thematic top-level submenus.
+    // Each Submenu() loops until the user picks 0 (Back).
+    // -------------------------------------------------------------------------
+
+    public void CharactersSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Characters ===");
+            Console.WriteLine("  1. List characters");
+            Console.WriteLine("  2. Select active character");
+            Console.WriteLine("  3. Add character");
+            Console.WriteLine("  4. Edit character");
+            Console.WriteLine("  5. Delete character");
+            Console.WriteLine("  6. Level up character");
+            Console.WriteLine("  7. Character detail");
+            Console.WriteLine("  0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": DisplayCharacters(); break;
+                case "2": SelectCharacter(); break;
+                case "3": AddCharacter(); break;
+                case "4": EditCharacter(); break;
+                case "5": DeleteCharacter(); break;
+                case "6": LevelUpCharacter(); break;
+                case "7": DisplayCharacterDetail(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Items submenu — list / create (subtype-aware) / view / edit / remove
+    // -------------------------------------------------------------------------
+
+    public void ItemsSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Items ===");
+            Console.WriteLine("  1. List items");
+            Console.WriteLine("  2. Create item");
+            Console.WriteLine("  3. View item detail");
+            Console.WriteLine("  4. Edit item (common fields)");
+            Console.WriteLine("  5. Remove item");
+            Console.WriteLine("  0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": ListItems(); break;
+                case "2": AddItem(); break;
+                case "3": ViewItemDetail(); break;
+                case "4": EditItem(); break;
+                case "5": RemoveItem(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private void ListItems()
+    {
+        var items = _dbContext.Items.ToList();
+        if (!items.Any()) { Console.WriteLine("\nNo items in database."); return; }
+        Console.WriteLine("\n--- Items ---");
+        foreach (var i in items.OrderBy(i => i.TypeNameForItem()).ThenBy(i => i.Name))
+        {
+            string container = i.ContainerId.HasValue ? $"container #{i.ContainerId}" : "(unowned)";
+            Console.WriteLine($"  [{i.Id}] {i.Name} — {i.TypeNameForItem()}, {i.Weight} lbs, {i.Value}g — {container}");
+        }
+    }
+
+    private Item? PromptItem(string verb)
+    {
+        ListItems();
+        Console.Write($"\nItem ID to {verb}: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var item = _dbContext.Items.FirstOrDefault(i => i.Id == id);
+        if (item is null) Console.WriteLine("Not found.");
+        return item;
+    }
+
+    private void ViewItemDetail()
+    {
+        var item = PromptItem("view");
+        if (item is null) return;
+        Console.WriteLine($"\n=== [{item.Id}] {item.Name} ({item.TypeNameForItem()}) ===");
+        Console.WriteLine($"  Description: {item.Description}");
+        Console.WriteLine($"  Value: {item.Value}g   Weight: {item.Weight} lbs");
+        Console.WriteLine($"  KeyItem: {item.IsKeyItem}   KeyId: {item.KeyId ?? "—"}");
+        Console.WriteLine($"  EligibleSlot: {(item.EligibleSlot.HasValue ? item.EligibleSlot.ToString() : "—")}");
+        switch (item)
+        {
+            case Weapon w: Console.WriteLine($"  Weapon: {w.WeaponType}, AP {w.AttackPower}, Dur {w.Durability}"); break;
+            case Shield s: Console.WriteLine($"  Shield: {s.WeightClass}, DR {s.DefenseRating}, Dur {s.Durability}"); break;
+            case Armor a: Console.WriteLine($"  Armor: {a.WeightClass} {a.Slot}, DR {a.DefenseRating}, Dur {a.Durability}"); break;
+            case Consumable c: Console.WriteLine($"  Consumable: effect '{c.Effect}', potency {c.Potency}"); break;
+        }
+    }
+
+    private void EditItem()
+    {
+        var item = PromptItem("edit");
+        if (item is null) return;
+
+        Console.Write($"Name [{item.Name}] (blank to keep): ");
+        var n = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(n)) item.Name = n.Trim();
+
+        Console.Write($"Description [{item.Description}] (blank to keep): ");
+        var d = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(d)) item.Description = d.Trim();
+
+        Console.Write($"Value [{item.Value}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var v)) item.Value = v;
+
+        Console.Write($"Weight [{item.Weight}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var w)) item.Weight = w;
+
+        _dbContext.SaveChanges();
+        Console.WriteLine("Item updated.");
+    }
+
+    private void RemoveItem()
+    {
+        var item = PromptItem("remove");
+        if (item is null) return;
+
+        Console.Write("(d)elete from database, (u)nown only, or (c)ancel? ");
+        switch (Console.ReadLine()?.Trim().ToLower())
+        {
+            case "d":
+                _dbContext.RemoveEntity(item);
+                _dbContext.SaveChanges();
+                Console.WriteLine("Item deleted.");
+                break;
+            case "u":
+                item.ContainerId = null;
+                _dbContext.SaveChanges();
+                Console.WriteLine("Item is now unowned.");
+                break;
+            default:
+                Console.WriteLine("Cancelled.");
+                break;
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Rooms & Doors submenu
+    // Per design: room delete cascades doors and orphans (a) characters' RoomId,
+    // (b) chests' RoomId, (c) items inside those chests' ContainerId.
+    // Items themselves are preserved in the database.
+    // -------------------------------------------------------------------------
+
+    public void RoomsSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Rooms & Doors ===");
+            Console.WriteLine("  1. List rooms");
+            Console.WriteLine("  2. Create room");
+            Console.WriteLine("  3. Edit room");
+            Console.WriteLine("  4. Remove room");
+            Console.WriteLine("  5. Door management ▶");
+            Console.WriteLine("  6. View current room (active player)");
+            Console.WriteLine("  7. Move active player");
+            Console.WriteLine("  0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": DisplayRooms(); break;
+                case "2": AddRoom(); break;
+                case "3": EditRoom(); break;
+                case "4": RemoveRoom(); break;
+                case "5": DoorsSubmenu(); break;
+                case "6": DisplayCurrentRoom(); break;
+                case "7": MovePlayer(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private Room? PromptRoom(string verb)
+    {
+        DisplayRooms();
+        Console.Write($"\nRoom ID to {verb}: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var room = _dbContext.Rooms.FirstOrDefault(r => r.Id == id);
+        if (room is null) Console.WriteLine("Not found.");
+        return room;
+    }
+
+    private void EditRoom()
+    {
+        var room = PromptRoom("edit");
+        if (room is null) return;
+
+        Console.Write($"Name [{room.Name}] (blank to keep): ");
+        var n = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(n)) room.Name = n.Trim();
+
+        Console.Write($"Description [{room.Description}] (blank to keep): ");
+        var d = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(d)) room.Description = d.Trim();
+
+        _dbContext.SaveChanges();
+        Console.WriteLine("Room updated.");
+    }
+
+    private void RemoveRoom()
+    {
+        var room = PromptRoom("remove");
+        if (room is null) return;
+
+        // Snapshot dependents before mutation.
+        var chestsHere = _dbContext.Containers.OfType<Chest>().Where(c => c.RoomId == room.Id).ToList();
+        var doorsTouching = _dbContext.Doors
+            .Where(d => d.SourceRoomId == room.Id || d.DestinationRoomId == room.Id)
+            .ToList();
+        var charactersHere = _dbContext.Characters.Where(c => c.RoomId == room.Id).ToList();
+
+        Console.WriteLine($"\nRemoving '{room.Name}' will:");
+        Console.WriteLine($"  - orphan {charactersHere.Count} character(s) (RoomId cleared)");
+        Console.WriteLine($"  - delete {chestsHere.Count} chest(s) in the room (their items become unowned)");
+        Console.WriteLine($"  - delete {doorsTouching.Count} door(s) touching the room");
+        Console.Write("Confirm? (y/N): ");
+        if ((Console.ReadLine()?.Trim().ToLower() ?? "") != "y") { Console.WriteLine("Cancelled."); return; }
+
+        // Orphan items inside chests, then delete chests.
+        foreach (var chest in chestsHere)
+        {
+            var items = _dbContext.Items.Where(i => i.ContainerId == chest.Id).ToList();
+            foreach (var i in items) i.ContainerId = null;
+            _dbContext.RemoveEntity(chest);
+        }
+        // Orphan characters.
+        foreach (var c in charactersHere) c.RoomId = null;
+        // Delete doors.
+        foreach (var d in doorsTouching) _dbContext.RemoveEntity(d);
+
+        _dbContext.RemoveEntity(room);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Room '{room.Name}' removed.");
+    }
+
+    public void DoorsSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Doors ===");
+            Console.WriteLine("  1. List doors");
+            Console.WriteLine("  2. Add door");
+            Console.WriteLine("  3. Toggle lock on door");
+            Console.WriteLine("  4. Remove door");
+            Console.WriteLine("  0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": ListDoors(); break;
+                case "2": AddDoor(); break;
+                case "3": ToggleDoorLock(); break;
+                case "4": RemoveDoor(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private void ListDoors()
+    {
+        var doors = _dbContext.Doors.ToList();
+        if (!doors.Any()) { Console.WriteLine("\nNo doors."); return; }
+        Console.WriteLine("\n--- Doors ---");
+        foreach (var d in doors)
+            Console.WriteLine($"  [{d.Id}] {d.Name}: {d.SourceRoom.Name} —{d.Direction}→ {d.DestinationRoom.Name}{(d.IsLocked ? " [LOCKED]" : "")}");
+    }
+
+    private Door? PromptDoor(string verb)
+    {
+        ListDoors();
+        Console.Write($"\nDoor ID to {verb}: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var door = _dbContext.Doors.FirstOrDefault(d => d.Id == id);
+        if (door is null) Console.WriteLine("Not found.");
+        return door;
+    }
+
+    private void ToggleDoorLock()
+    {
+        var door = PromptDoor("toggle");
+        if (door is null) return;
+        door.IsLocked = !door.IsLocked;
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Door '{door.Name}' is now {(door.IsLocked ? "LOCKED" : "unlocked")}.");
+    }
+
+    private void RemoveDoor()
+    {
+        var door = PromptDoor("remove");
+        if (door is null) return;
+        _dbContext.RemoveEntity(door);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Door '{door.Name}' removed.");
+    }
+
+    // -------------------------------------------------------------------------
+    // Skills / Abilities / Magic — global definition CRUD + assign-to-character
+    // -------------------------------------------------------------------------
+
+    public void SkillsSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Skills ===");
+            Console.WriteLine("  1. List   2. Create   3. Edit   4. Delete   5. Assign to character   0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": ListSkills(); break;
+                case "2": CreateSkill(); break;
+                case "3": EditSkillDef(); break;
+                case "4": DeleteSkillDef(); break;
+                case "5": AssignSkillToCharacter(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private void ListSkills()
+    {
+        var skills = _dbContext.Skills.ToList();
+        if (!skills.Any()) { Console.WriteLine("\nNo skills."); return; }
+        Console.WriteLine("\n--- Skills ---");
+        foreach (var s in skills)
+        {
+            string sec = s.SecondaryAttribute.HasValue ? s.SecondaryAttribute.ToString()! : "—";
+            Console.WriteLine($"  [{s.Id}] {s.Name} (Primary: {s.PrimaryAttribute}, Secondary: {sec})");
+        }
+    }
+
+    private void CreateSkill()
+    {
+        Console.Write("Skill name: ");
+        var name = Console.ReadLine() ?? "";
+        Console.Write("Description: ");
+        var desc = Console.ReadLine() ?? "";
+        var primary = PromptAttribute("Primary attribute");
+        if (primary is null) return;
+        Console.Write("Secondary attribute (blank for none): ");
+        var secInput = Console.ReadLine()?.Trim();
+        CoreAttribute? secondary = null;
+        if (!string.IsNullOrEmpty(secInput) && Enum.TryParse<CoreAttribute>(secInput, true, out var sec))
+            secondary = sec;
+
+        var skill = new Skill { Name = name, Description = desc, PrimaryAttribute = primary.Value, SecondaryAttribute = secondary };
+        _dbContext.AddEntity(skill);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Skill '{name}' created (ID {skill.Id}).");
+    }
+
+    private Skill? PromptSkill(string verb)
+    {
+        ListSkills();
+        Console.Write($"\nSkill ID to {verb}: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var s = _dbContext.Skills.FirstOrDefault(x => x.Id == id);
+        if (s is null) Console.WriteLine("Not found.");
+        return s;
+    }
+
+    private void EditSkillDef()
+    {
+        var s = PromptSkill("edit");
+        if (s is null) return;
+        Console.Write($"Name [{s.Name}] (blank to keep): ");
+        var n = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(n)) s.Name = n.Trim();
+        Console.Write($"Description [{s.Description}] (blank to keep): ");
+        var d = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(d)) s.Description = d.Trim();
+        _dbContext.SaveChanges();
+        Console.WriteLine("Skill updated.");
+    }
+
+    private void DeleteSkillDef()
+    {
+        var s = PromptSkill("delete");
+        if (s is null) return;
+        _dbContext.RemoveEntity(s);
+        _dbContext.SaveChanges();
+        Console.WriteLine("Skill deleted.");
+    }
+
+    private void AssignSkillToCharacter()
+    {
+        var skill = PromptSkill("assign");
+        if (skill is null) return;
+        var character = ResolveActiveOrPrompt("assign skill to");
+        if (character is null) return;
+        if (character.CharacterSkills.Any(cs => cs.SkillId == skill.Id))
+        {
+            Console.WriteLine($"{character.Name} already has {skill.Name}.");
+            return;
+        }
+        Console.Write("Proficiency (integer): ");
+        if (!int.TryParse(Console.ReadLine(), out var prof)) { Console.WriteLine("Invalid."); return; }
+        var cs = new CharacterSkill { CharacterId = character.Id, SkillId = skill.Id, Proficiency = prof };
+        _dbContext.AddEntity(cs);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Assigned {skill.Name} (Prof {prof}) to {character.Name}.");
+    }
+
+    public void AbilitiesSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Abilities ===");
+            Console.WriteLine("  1. List   2. Create   3. Edit   4. Delete   5. Assign to character   0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": ListAbilities(); break;
+                case "2": CreateAbility(); break;
+                case "3": EditAbilityDef(); break;
+                case "4": DeleteAbilityDef(); break;
+                case "5": AssignAbilityToCharacter(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private void ListAbilities()
+    {
+        var abilities = _dbContext.Abilities.ToList();
+        if (!abilities.Any()) { Console.WriteLine("\nNo abilities."); return; }
+        Console.WriteLine("\n--- Abilities ---");
+        foreach (var a in abilities)
+            Console.WriteLine($"  [{a.Id}] {a.Name} ({a.Kind}, Power {a.Power}, Cost {a.StaminaCost} SP, Stat {a.PrimaryStat})");
+    }
+
+    private void CreateAbility()
+    {
+        Console.Write("Ability name: ");
+        var name = Console.ReadLine() ?? "";
+        Console.Write("Description: ");
+        var desc = Console.ReadLine() ?? "";
+        Console.Write("Power: ");
+        int.TryParse(Console.ReadLine(), out var power);
+        Console.Write("Stamina cost: ");
+        int.TryParse(Console.ReadLine(), out var cost);
+        Console.Write($"Kind ({string.Join("/", Enum.GetNames<AbilityKind>())}): ");
+        if (!Enum.TryParse<AbilityKind>(Console.ReadLine(), true, out var kind)) { Console.WriteLine("Invalid kind."); return; }
+        var stat = PromptAttribute("Primary stat");
+        if (stat is null) return;
+        var ab = new Ability { Name = name, Description = desc, Power = power, StaminaCost = cost, Kind = kind, PrimaryStat = stat.Value };
+        _dbContext.AddEntity(ab);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Ability '{name}' created (ID {ab.Id}).");
+    }
+
+    private Ability? PromptAbility(string verb)
+    {
+        ListAbilities();
+        Console.Write($"\nAbility ID to {verb}: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var a = _dbContext.Abilities.FirstOrDefault(x => x.Id == id);
+        if (a is null) Console.WriteLine("Not found.");
+        return a;
+    }
+
+    private void EditAbilityDef()
+    {
+        var a = PromptAbility("edit");
+        if (a is null) return;
+        Console.Write($"Name [{a.Name}] (blank to keep): ");
+        var n = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(n)) a.Name = n.Trim();
+        Console.Write($"Description [{a.Description}] (blank to keep): ");
+        var d = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(d)) a.Description = d.Trim();
+        Console.Write($"Power [{a.Power}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var p)) a.Power = p;
+        Console.Write($"Stamina cost [{a.StaminaCost}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var c)) a.StaminaCost = c;
+        _dbContext.SaveChanges();
+        Console.WriteLine("Ability updated.");
+    }
+
+    private void DeleteAbilityDef()
+    {
+        var a = PromptAbility("delete");
+        if (a is null) return;
+        _dbContext.RemoveEntity(a);
+        _dbContext.SaveChanges();
+        Console.WriteLine("Ability deleted.");
+    }
+
+    private void AssignAbilityToCharacter()
+    {
+        var ab = PromptAbility("assign");
+        if (ab is null) return;
+        var character = ResolveActiveOrPrompt("assign ability to");
+        if (character is null) return;
+        if (character.Abilities.Any(x => x.Id == ab.Id))
+        {
+            Console.WriteLine($"{character.Name} already has {ab.Name}.");
+            return;
+        }
+        character.Abilities.Add(ab);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Assigned {ab.Name} to {character.Name}.");
+    }
+
+    public void MagicSubmenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Magic ===");
+            Console.WriteLine("  1. List   2. Create   3. Edit   4. Delete   5. Assign to character   0. Back");
+            Console.Write("Choice: ");
+            switch (Console.ReadLine()?.Trim())
+            {
+                case "1": ListMagic(); break;
+                case "2": CreateMagic(); break;
+                case "3": EditMagicDef(); break;
+                case "4": DeleteMagicDef(); break;
+                case "5": AssignMagicToCharacter(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid."); break;
+            }
+        }
+    }
+
+    private void ListMagic()
+    {
+        var magics = _dbContext.Magics.ToList();
+        if (!magics.Any()) { Console.WriteLine("\nNo magic defined."); return; }
+        Console.WriteLine("\n--- Magic ---");
+        foreach (var m in magics)
+            Console.WriteLine($"  [{m.Id}] {m.Name} ({m.Element}, {m.Kind}) Power {m.Power}, BitPool {m.BitPoolCost}, Bytes {m.BytePoolCost}, Stat {m.PrimaryStat}");
+    }
+
+    private void CreateMagic()
+    {
+        Console.Write("Magic name: ");
+        var name = Console.ReadLine() ?? "";
+        Console.Write("Description: ");
+        var desc = Console.ReadLine() ?? "";
+        Console.Write("Power: ");
+        int.TryParse(Console.ReadLine(), out var power);
+        Console.Write("BitPool cost: ");
+        int.TryParse(Console.ReadLine(), out var bit);
+        Console.Write("BytePool cost: ");
+        int.TryParse(Console.ReadLine(), out var bytes);
+        Console.Write($"Element ({string.Join("/", Enum.GetNames<Element>())}): ");
+        if (!Enum.TryParse<Element>(Console.ReadLine(), true, out var element)) { Console.WriteLine("Invalid element."); return; }
+        Console.Write($"Kind ({string.Join("/", Enum.GetNames<MagicKind>())}): ");
+        if (!Enum.TryParse<MagicKind>(Console.ReadLine(), true, out var kind)) { Console.WriteLine("Invalid kind."); return; }
+        var stat = PromptAttribute("Primary stat");
+        if (stat is null) return;
+
+        var m = new MagicEntity
+        {
+            Name = name, Description = desc, Power = power,
+            BitPoolCost = bit, BytePoolCost = bytes,
+            Element = element, Kind = kind, PrimaryStat = stat.Value
+        };
+        _dbContext.AddEntity(m);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Magic '{name}' created (ID {m.Id}).");
+    }
+
+    private MagicEntity? PromptMagic(string verb)
+    {
+        ListMagic();
+        Console.Write($"\nMagic ID to {verb}: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var m = _dbContext.Magics.FirstOrDefault(x => x.Id == id);
+        if (m is null) Console.WriteLine("Not found.");
+        return m;
+    }
+
+    private void EditMagicDef()
+    {
+        var m = PromptMagic("edit");
+        if (m is null) return;
+        Console.Write($"Name [{m.Name}] (blank to keep): ");
+        var n = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(n)) m.Name = n.Trim();
+        Console.Write($"Description [{m.Description}] (blank to keep): ");
+        var d = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(d)) m.Description = d.Trim();
+        Console.Write($"Power [{m.Power}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var p)) m.Power = p;
+        Console.Write($"BitPool cost [{m.BitPoolCost}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var bp)) m.BitPoolCost = bp;
+        Console.Write($"BytePool cost [{m.BytePoolCost}] (blank to keep): ");
+        if (int.TryParse(Console.ReadLine(), out var by)) m.BytePoolCost = by;
+        _dbContext.SaveChanges();
+        Console.WriteLine("Magic updated.");
+    }
+
+    private void DeleteMagicDef()
+    {
+        var m = PromptMagic("delete");
+        if (m is null) return;
+        _dbContext.RemoveEntity(m);
+        _dbContext.SaveChanges();
+        Console.WriteLine("Magic deleted.");
+    }
+
+    private void AssignMagicToCharacter()
+    {
+        var m = PromptMagic("assign");
+        if (m is null) return;
+        var character = ResolveActiveOrPrompt("assign magic to");
+        if (character is null) return;
+        if (character.Magics.Any(x => x.Id == m.Id))
+        {
+            Console.WriteLine($"{character.Name} already knows {m.Name}.");
+            return;
+        }
+        character.Magics.Add(m);
+        _dbContext.SaveChanges();
+        Console.WriteLine($"Assigned {m.Name} to {character.Name}.");
+    }
+
+    private static CoreAttribute? PromptAttribute(string label)
+    {
+        Console.Write($"{label} ({string.Join("/", Enum.GetNames<CoreAttribute>())}): ");
+        if (Enum.TryParse<CoreAttribute>(Console.ReadLine(), true, out var attr)) return attr;
+        Console.WriteLine("Invalid attribute.");
+        return null;
     }
 }
 

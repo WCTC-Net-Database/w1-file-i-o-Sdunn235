@@ -8,7 +8,7 @@ public class Magic
     public string Name { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public int Power { get; set; }
-    public int BpCost { get; set; }
+    public int BitPoolCost { get; set; }
     public int BytePoolCost { get; set; }
     public Element Element { get; set; }
     public MagicKind Kind { get; set; }

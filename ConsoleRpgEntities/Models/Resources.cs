@@ -10,8 +10,8 @@ public class Resources
     public int Sp { get; set; }
     public int MaxSp { get; set; }
 
-    public int Bp { get; set; }
-    public int MaxBp { get; set; }
+    public int BitPool { get; set; }
+    public int MaxBitPool { get; set; }
 
     public int BytePool { get; set; }
     public int MaxBytePool { get; set; }
