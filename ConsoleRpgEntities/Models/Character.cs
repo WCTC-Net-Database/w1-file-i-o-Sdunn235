@@ -62,4 +62,228 @@ public abstract class Character
 
     // W12: un-proxy a lazy-loaded entity so GetType().Name returns "Player" not "PlayerProxy".
     public string TypeName => GetType().BaseType?.Name ?? GetType().Name;
+
+    // -------------------------------------------------------------------------
+    // Inventory / Equipment / Chest verbs (W12 + W13).
+    // Promoted from Player to Character in Phase 1.5: NPCs and Animals get the
+    // same capabilities. All operations mutate state in memory; caller is
+    // responsible for SaveChanges().
+    // -------------------------------------------------------------------------
+
+    // Single shared d20 source for skill rolls (lockpicking, etc.).
+    private static readonly Random _rng = new();
+
+    public bool PickUp(Item item)
+    {
+        if (Inventory is null) return false;
+        if (!Inventory.CanFit(item.Weight)) return false;
+
+        Inventory.AddItem(item);
+        return true;
+    }
+
+    public void Drop(Item item)
+    {
+        if (Inventory is not null && Inventory.ItemsCollection.Contains(item))
+            Inventory.RemoveItem(item);
+        else
+            item.ContainerId = null;
+    }
+
+    public bool Equip(Item item)
+    {
+        if (Equipment is null) return false;
+
+        var slot = PickSlotFor(item);
+        if (slot is null) return false;
+
+        Inventory?.ItemsCollection.Remove(item);
+        Equipment.AddItem(item);
+        slot.EquippedItemId = item.Id;
+        slot.EquippedItem = item;
+        return true;
+    }
+
+    public void Unequip(Item item)
+    {
+        if (Equipment is null) return;
+
+        var slot = Equipment.Slots.FirstOrDefault(s => s.EquippedItemId == item.Id);
+        if (slot is not null)
+        {
+            slot.EquippedItemId = null;
+            slot.EquippedItem = null;
+        }
+
+        Equipment.ItemsCollection.Remove(item);
+        Inventory?.AddItem(item);
+    }
+
+    public void UseItem(Consumable item)
+    {
+        if (Resources is null) return;
+
+        switch (item.Effect.ToLowerInvariant())
+        {
+            case "heal":
+                Resources.Hp = Math.Min(Resources.MaxHp, Resources.Hp + item.Potency);
+                break;
+            case "stamina":
+                Resources.Sp = Math.Min(Resources.MaxSp, Resources.Sp + item.Potency);
+                break;
+            case "bp":
+            case "bitpool":
+                Resources.BitPool = Math.Min(Resources.MaxBitPool, Resources.BitPool + item.Potency);
+                break;
+            case "bytepool":
+                Resources.BytePool = Math.Min(Resources.MaxBytePool, Resources.BytePool + item.Potency);
+                break;
+        }
+
+        Inventory?.RemoveItem(item);
+    }
+
+    private EquipmentSlot? PickSlotFor(Item item)
+    {
+        if (Equipment is null) return null;
+
+        // Shield first — it's a subclass of Armor, so the Armor case below would
+        // otherwise route it to BodySlot.Hands (wrong: shields use a hand slot).
+        if (item is Shield)
+        {
+            return Equipment.Slots.FirstOrDefault(s =>
+                       s.Slot == Enums.SlotType.OffHand && s.EquippedItemId is null)
+                ?? Equipment.Slots.FirstOrDefault(s =>
+                       s.Slot == Enums.SlotType.MainHand && s.EquippedItemId is null);
+        }
+
+        return item switch
+        {
+            Weapon => Equipment.Slots.FirstOrDefault(s =>
+                s.Slot == Enums.SlotType.MainHand && s.EquippedItemId is null),
+            Armor armor => Equipment.Slots.FirstOrDefault(s =>
+                BodySlotToSlotType(armor.Slot) == s.Slot && s.EquippedItemId is null),
+            _ => null
+        };
+    }
+
+    private static Enums.SlotType BodySlotToSlotType(Enums.BodySlot body) => body switch
+    {
+        Enums.BodySlot.Head => Enums.SlotType.Head,
+        Enums.BodySlot.Chest => Enums.SlotType.Chest,
+        Enums.BodySlot.Legs => Enums.SlotType.Legs,
+        Enums.BodySlot.Feet => Enums.SlotType.Feet,
+        Enums.BodySlot.Hands => Enums.SlotType.Hands,
+        _ => Enums.SlotType.Chest
+    };
+
+    // -- W13 chest & loot verbs --
+
+    public OpenResult OpenChest(Chest chest)
+    {
+        if (chest is null) throw new ArgumentNullException(nameof(chest));
+
+        if (!chest.IsLocked && (chest.IsTrapped && !chest.TrapDisarmed))
+        {
+            chest.TrapDisarmed = true;
+            if (Resources is not null)
+                Resources.Hp = Math.Max(0, Resources.Hp - chest.TrapDamage);
+            return OpenResult.Trapped;
+        }
+
+        if (chest.IsLocked)
+            return OpenResult.Locked;
+
+        return OpenResult.Opened;
+    }
+
+    public bool TryUnlock(Chest chest, Item key)
+    {
+        if (chest is null) throw new ArgumentNullException(nameof(chest));
+        if (key is null) throw new ArgumentNullException(nameof(key));
+        if (!key.IsKeyItem) return false;
+        if (!chest.IsLocked) return true;
+
+        if (key.KeyId is null)
+        {
+            // Lockpick branch.
+            if (!chest.IsPickable || chest.RequiredKeyId is not null)
+            {
+                Inventory?.RemoveItem(key);
+                return false;
+            }
+
+            int reflexes = Stats?.Reflexes ?? 0;
+            int proficiency = CharacterSkills
+                .FirstOrDefault(cs => cs.Skill?.Name == "Lockpicking")?.Proficiency ?? 0;
+            int roll = _rng.Next(1, 21); // d20
+            int total = roll + reflexes + proficiency;
+
+            Inventory?.RemoveItem(key); // consumed regardless
+            if (total >= chest.UnlockDC)
+            {
+                chest.IsLocked = false;
+                return true;
+            }
+            return false;
+        }
+
+        // Specific key branch.
+        if (chest.RequiredKeyId is null) return false;
+        if (string.Equals(key.KeyId, chest.RequiredKeyId, StringComparison.Ordinal))
+        {
+            chest.IsLocked = false;
+            return true;
+        }
+        return false;
+    }
+
+    public bool DisarmTrap(Chest chest, Item lockpick)
+    {
+        if (chest is null) throw new ArgumentNullException(nameof(chest));
+        if (lockpick is null) throw new ArgumentNullException(nameof(lockpick));
+        if (!lockpick.IsKeyItem || lockpick.KeyId is not null) return false;
+        if (!chest.IsTrapped || chest.TrapDisarmed) return false;
+
+        chest.TrapDisarmed = true;
+        Inventory?.RemoveItem(lockpick);
+        return true;
+    }
+
+    public int LootChest(Chest chest)
+    {
+        if (chest is null) throw new ArgumentNullException(nameof(chest));
+        if (Inventory is null) return 0;
+        if (chest.IsLocked) return 0;
+
+        int moved = 0;
+        var items = chest.ItemsCollection.ToList();
+        foreach (var item in items)
+        {
+            if (!Inventory.CanFit(item.Weight)) continue;
+            chest.RemoveItem(item);
+            Inventory.AddItem(item);
+            moved++;
+        }
+        return moved;
+    }
+
+    public int LootMonster(Npc monster)
+    {
+        if (monster is null) throw new ArgumentNullException(nameof(monster));
+        if (Inventory is null) return 0;
+        if (monster.Loot is null || monster.Loot.IsLooted) return 0;
+
+        int moved = 0;
+        var items = monster.Loot.ItemsCollection.ToList();
+        foreach (var item in items)
+        {
+            if (!Inventory.CanFit(item.Weight)) continue;
+            monster.Loot.RemoveItem(item);
+            Inventory.AddItem(item);
+            moved++;
+        }
+        monster.Loot.IsLooted = true;
+        return moved;
+    }
 }

@@ -80,8 +80,18 @@ public class GameEngine
 
         if (slotsCleared > 0) _dbContext.SaveChanges();
 
-        if (orphans.Count > 0 || slotsCleared > 0)
-            Console.WriteLine($"[Startup] Integrity sweep: backfilled {orphans.Count} Stats row(s), cleared {slotsCleared} invalid equipment slot(s).");
+        // 3. Phase 1.5: every Character gets Inventory + Equipment containers.
+        // Backfill for any pre-existing character (Player, NPC, Animal) that
+        // doesn't have them. Re-fetch character list — IDs are stable but
+        // EnsureContainersFor calls SaveChanges and we want a clean snapshot.
+        int containersBackfilled = 0;
+        foreach (var c in _dbContext.Characters.ToList())
+        {
+            if (EnsureContainersFor(c)) containersBackfilled++;
+        }
+
+        if (orphans.Count > 0 || slotsCleared > 0 || containersBackfilled > 0)
+            Console.WriteLine($"[Startup] Integrity sweep: backfilled {orphans.Count} Stats row(s), cleared {slotsCleared} invalid equipment slot(s), backfilled containers for {containersBackfilled} character(s).");
     }
 
     // -------------------------------------------------------------------------
@@ -231,7 +241,64 @@ public class GameEngine
         _dbContext.AddEntity(resources);
         _dbContext.SaveChanges();
 
+        // Phase 1.5: every character gets empty Inventory + Equipment containers
+        // and a full set of 7 EquipmentSlots — Player, NPC, and Animal alike.
+        EnsureContainersFor(character);
+
         Console.WriteLine($"\n{character.TypeName} '{name}' created.");
+    }
+
+    // Backfill empty Inventory + Equipment + EquipmentSlots for any character that
+    // doesn't already have them. Used at character creation and during the startup
+    // integrity sweep. Saves immediately. Returns true if anything was created.
+    private bool EnsureContainersFor(Character character)
+    {
+        bool changed = false;
+
+        bool hasInventory = _dbContext.Containers
+            .OfType<Inventory>()
+            .Any(i => i.OwnerCharacterId == character.Id);
+        if (!hasInventory)
+        {
+            var inv = new Inventory
+            {
+                Name = $"{character.Name}'s Pack",
+                OwnerCharacterId = character.Id,
+                MaxWeight = 100
+            };
+            _dbContext.AddEntity(inv);
+            changed = true;
+        }
+
+        bool hasEquipment = _dbContext.Containers
+            .OfType<Equipment>()
+            .Any(e => e.OwnerCharacterId == character.Id);
+        if (!hasEquipment)
+        {
+            var eq = new Equipment
+            {
+                Name = $"{character.Name}'s Gear",
+                OwnerCharacterId = character.Id
+            };
+            _dbContext.AddEntity(eq);
+            _dbContext.SaveChanges(); // need eq.Id before seeding slots
+            changed = true;
+
+            // One slot per SlotType enum value, all empty.
+            foreach (SlotType slotType in Enum.GetValues<SlotType>())
+            {
+                _dbContext.AddEntity(new EquipmentSlot
+                {
+                    CharacterId = character.Id,
+                    Slot = slotType,
+                    EquippedItemId = null,
+                    EquipmentContainerId = eq.Id
+                });
+            }
+        }
+
+        if (changed) _dbContext.SaveChanges();
+        return changed;
     }
 
     public void LevelUpCharacter()
@@ -470,17 +537,11 @@ public class GameEngine
 
     private void EditEquipment(Character c)
     {
-        if (c is not Player player)
-        {
-            Console.WriteLine($"\n{c.Name} is a {c.TypeName} — equipment management is Player-only.");
-            return;
-        }
-
         while (true)
         {
-            Console.WriteLine($"\n--- Equipment: {player.Name} ---");
-            if (player.EquipmentSlots.Any())
-                foreach (var slot in player.EquipmentSlots)
+            Console.WriteLine($"\n--- Equipment: {c.Name} ---");
+            if (c.EquipmentSlots.Any())
+                foreach (var slot in c.EquipmentSlots)
                     Console.WriteLine($"  {slot.Slot,-9} {slot.EquippedItem?.Name ?? "(empty)"}");
             else
                 Console.WriteLine("  (no slots)");
@@ -490,8 +551,8 @@ public class GameEngine
             var ch = Console.ReadLine()?.Trim();
             switch (ch)
             {
-                case "1": InventoryEquip(player); break;
-                case "2": InventoryUnequip(player); break;
+                case "1": InventoryEquip(c); break;
+                case "2": InventoryUnequip(c); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid."); break;
             }
@@ -500,21 +561,16 @@ public class GameEngine
 
     private void EditInventory(Character c)
     {
-        if (c is not Player player)
+        if (c.Inventory is null)
         {
-            Console.WriteLine($"\n{c.Name} is a {c.TypeName} — inventory is Player-only.");
-            return;
-        }
-        if (player.Inventory is null)
-        {
-            Console.WriteLine($"\n{player.Name} has no inventory container.");
+            Console.WriteLine($"\n{c.Name} has no inventory container.");
             return;
         }
 
         while (true)
         {
-            var items = Items(player).ToList();
-            Console.WriteLine($"\n--- Inventory: {player.Name} ({items.Count} items) ---");
+            var items = Items(c).ToList();
+            Console.WriteLine($"\n--- Inventory: {c.Name} ({items.Count} items) ---");
             foreach (var i in items)
                 Console.WriteLine($"  [{i.Id}] {i.Name} ({i.TypeNameForItem()})");
 
@@ -534,7 +590,7 @@ public class GameEngine
                 if (int.TryParse(Console.ReadLine(), out var iid))
                 {
                     var picked = pool.FirstOrDefault(i => i.Id == iid);
-                    if (picked != null) { picked.ContainerId = player.Inventory.Id; _dbContext.SaveChanges(); Console.WriteLine($"Added {picked.Name}."); }
+                    if (picked != null) { picked.ContainerId = c.Inventory.Id; _dbContext.SaveChanges(); Console.WriteLine($"Added {picked.Name}."); }
                     else Console.WriteLine("Not unowned.");
                 }
             }
@@ -666,15 +722,6 @@ public class GameEngine
         return _activeCharacter;
     }
 
-    private Player? ResolveActivePlayer()
-    {
-        var character = ResolveActiveOrPrompt("use for inventory");
-        if (character is Player p) return p;
-        if (character is not null)
-            Console.WriteLine($"\n{character.Name} is a {character.TypeName}, not a Player — inventory actions are Player-only.");
-        return null;
-    }
-
     // -------------------------------------------------------------------------
     // Room & Navigation
     // -------------------------------------------------------------------------
@@ -764,7 +811,7 @@ public class GameEngine
 
     public void DisplayCurrentRoom()
     {
-        var player = ResolveActivePlayer();
+        var player = ResolveActiveOrPrompt("view current room for");
         if (player is null) return;
         if (player.Room is null) { Console.WriteLine($"\n{player.Name} is not in any room."); return; }
 
@@ -794,7 +841,7 @@ public class GameEngine
 
     public void MovePlayer()
     {
-        var player = ResolveActivePlayer();
+        var player = ResolveActiveOrPrompt("move");
         if (player is null) return;
         if (player.Room is null) { Console.WriteLine($"\n{player.Name} is not in any room."); return; }
 
@@ -917,12 +964,12 @@ public class GameEngine
     }
 
     // -------------------------------------------------------------------------
-    // W12 — Inventory Management (Player only)
+    // W12 — Inventory Management (any character)
     // -------------------------------------------------------------------------
 
     public void InventoryMenu()
     {
-        var player = ResolveActivePlayer();
+        var player = ResolveActiveOrPrompt("manage inventory for");
         if (player is null) return;
 
         if (player.Inventory is null)
@@ -964,10 +1011,10 @@ public class GameEngine
         }
     }
 
-    private static IEnumerable<Item> Items(Player p) =>
+    private static IEnumerable<Item> Items(Character p) =>
         p.Inventory?.ItemsCollection ?? Enumerable.Empty<Item>();
 
-    private void InventoryList(Player player)
+    private void InventoryList(Character player)
     {
         var items = Items(player).ToList();
         var max = player.Inventory!.MaxWeight;
@@ -980,7 +1027,7 @@ public class GameEngine
             Console.WriteLine($"  [{i.Id}] {i.Name} — {i.TypeNameForItem()}, {i.Weight} lbs, {i.Value}g");
     }
 
-    private void InventorySearch(Player player)
+    private void InventorySearch(Character player)
     {
         Console.Write("Search query: ");
         var q = Console.ReadLine() ?? string.Empty;
@@ -995,7 +1042,7 @@ public class GameEngine
             Console.WriteLine($"  [{i.Id}] {i.Name} — {i.TypeNameForItem()}");
     }
 
-    private void InventoryGroupByType(Player player)
+    private void InventoryGroupByType(Character player)
     {
         var groups = Items(player)
             .GroupBy(i => i.TypeNameForItem())
@@ -1013,7 +1060,7 @@ public class GameEngine
         }
     }
 
-    private void InventorySort(Player player)
+    private void InventorySort(Character player)
     {
         Console.WriteLine("\nSort by: 1. Name  2. Value (desc)  3. Weight (asc)");
         Console.Write("Choice: ");
@@ -1035,7 +1082,7 @@ public class GameEngine
             Console.WriteLine($"  [{i.Id}] {i.Name} — {i.TypeNameForItem()}, {i.Weight} lbs, {i.Value}g");
     }
 
-    private void InventoryEquip(Player player)
+    private void InventoryEquip(Character player)
     {
         var equipables = Items(player).Where(i => i is Weapon or Armor).ToList();
         if (!equipables.Any()) { Console.WriteLine("\nNo weapons or armor in inventory."); return; }
@@ -1058,7 +1105,7 @@ public class GameEngine
         else Console.WriteLine("Could not equip (no compatible open slot, or no Equipment container).");
     }
 
-    private void InventoryUnequip(Player player)
+    private void InventoryUnequip(Character player)
     {
         if (player.Equipment is null) { Console.WriteLine("\nNo Equipment container."); return; }
         var equipped = player.Equipment.ItemsCollection.ToList();
@@ -1078,7 +1125,7 @@ public class GameEngine
         Console.WriteLine($"Unequipped {item.Name}.");
     }
 
-    private void InventoryUseConsumable(Player player)
+    private void InventoryUseConsumable(Character player)
     {
         var consumables = Items(player).OfType<Consumable>().ToList();
         if (!consumables.Any()) { Console.WriteLine("\nNo consumables."); return; }
@@ -1098,7 +1145,7 @@ public class GameEngine
     }
 
     // ---- Graded LINQ Task A: Strongest Weapon ----
-    private void InventoryStrongestWeapon(Player player)
+    private void InventoryStrongestWeapon(Character player)
     {
         var strongest = Items(player)
             .OfType<Weapon>()
@@ -1111,7 +1158,7 @@ public class GameEngine
     }
 
     // ---- Graded LINQ Task B: Total Value + GroupBy breakdown ----
-    private void InventoryTotalValueBreakdown(Player player)
+    private void InventoryTotalValueBreakdown(Character player)
     {
         var items = Items(player).ToList();
 
@@ -1133,12 +1180,12 @@ public class GameEngine
     }
 
     // -------------------------------------------------------------------------
-    // W13 — Chest & Monster Loot Interaction (Player only)
+    // W13 — Chest & Monster Loot Interaction (any character)
     // -------------------------------------------------------------------------
 
     public void ChestMenu()
     {
-        var player = ResolveActivePlayer();
+        var player = ResolveActiveOrPrompt("interact with chests for");
         if (player is null) return;
 
         while (true)
@@ -1170,17 +1217,17 @@ public class GameEngine
         }
     }
 
-    private List<Chest> ChestsInPlayerRoom(Player player) =>
+    private List<Chest> ChestsInCharacterRoom(Character player) =>
         _dbContext.Containers
             .OfType<Chest>()
             .Where(c => c.RoomId == player.RoomId)
             .ToList();
 
-    private void ChestList(Player player)
+    private void ChestList(Character player)
     {
         if (player.RoomId is null) { Console.WriteLine("\nPlayer is not in a room."); return; }
 
-        var chests = ChestsInPlayerRoom(player);
+        var chests = ChestsInCharacterRoom(player);
         Console.WriteLine($"\n--- Chests in {player.Room?.Name ?? "this room"} ({chests.Count}) ---");
         if (!chests.Any()) { Console.WriteLine("  (none)"); return; }
 
@@ -1197,9 +1244,9 @@ public class GameEngine
         }
     }
 
-    private Chest? PromptForChest(Player player)
+    private Chest? PromptForChest(Character player)
     {
-        var chests = ChestsInPlayerRoom(player);
+        var chests = ChestsInCharacterRoom(player);
         if (!chests.Any()) { Console.WriteLine("\nNo chests in this room."); return null; }
 
         Console.Write("Chest ID: ");
@@ -1209,7 +1256,7 @@ public class GameEngine
         return chest;
     }
 
-    private void ChestOpen(Player player)
+    private void ChestOpen(Character player)
     {
         var chest = PromptForChest(player);
         if (chest is null) return;
@@ -1234,7 +1281,7 @@ public class GameEngine
         }
     }
 
-    private void ChestTryUnlock(Player player)
+    private void ChestTryUnlock(Character player)
     {
         var chest = PromptForChest(player);
         if (chest is null) return;
@@ -1266,7 +1313,7 @@ public class GameEngine
             Console.WriteLine($"\nThat key doesn't fit {chest.Name}.");
     }
 
-    private void ChestDisarmTrap(Player player)
+    private void ChestDisarmTrap(Character player)
     {
         var chest = PromptForChest(player);
         if (chest is null) return;
@@ -1283,7 +1330,7 @@ public class GameEngine
             : $"\nCouldn't disarm — chest isn't trapped, or already disarmed, or item isn't a lockpick.");
     }
 
-    private void ChestLoot(Player player)
+    private void ChestLoot(Character player)
     {
         var chest = PromptForChest(player);
         if (chest is null) return;
@@ -1294,7 +1341,7 @@ public class GameEngine
         Console.WriteLine($"\nLooted {moved} item(s) from {chest.Name}.");
     }
 
-    private void ChestLootMonster(Player player)
+    private void ChestLootMonster(Character player)
     {
         if (player.RoomId is null) { Console.WriteLine("\nPlayer is not in a room."); return; }
 
