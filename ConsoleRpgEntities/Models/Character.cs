@@ -1,5 +1,6 @@
 using ConsoleRpgEntities.Models.Abilities;
 using ConsoleRpgEntities.Models.Containers;
+using ConsoleRpgEntities.Models.Enums;
 using ConsoleRpgEntities.Models.Items;
 using ConsoleRpgEntities.Models.Magic;
 using ConsoleRpgEntities.Models.Races;
@@ -123,24 +124,39 @@ public abstract class Character
     {
         if (Resources is null) return;
 
-        switch (item.Effect.ToLowerInvariant())
+        // W14 Phase B: switch on the typed Effect enum (was: switch on lowered
+        // string). The 'applied' flag fixes a W12/W13 bug where unrecognized
+        // effect strings ("keyitem"/"lockpick"/typos) silently consumed the
+        // item without doing anything. With the enum, only real effects can
+        // be selected at compile time AND the consume step now requires a
+        // successful application.
+        var applied = false;
+        switch (item.Effect)
         {
-            case "heal":
+            case ConsumableEffect.Heal:
                 Resources.Hp = Math.Min(Resources.MaxHp, Resources.Hp + item.Potency);
+                applied = true;
                 break;
-            case "stamina":
+            case ConsumableEffect.Stamina:
                 Resources.Sp = Math.Min(Resources.MaxSp, Resources.Sp + item.Potency);
+                applied = true;
                 break;
-            case "bp":
-            case "bitpool":
+            case ConsumableEffect.BitPool:
                 Resources.BitPool = Math.Min(Resources.MaxBitPool, Resources.BitPool + item.Potency);
+                applied = true;
                 break;
-            case "bytepool":
+            case ConsumableEffect.BytePool:
                 Resources.BytePool = Math.Min(Resources.MaxBytePool, Resources.BytePool + item.Potency);
+                applied = true;
+                break;
+            case ConsumableEffect.None:
+                // Non-effect-bearing rows (KeyItems, lockpicks pre-Phase-C).
+                // Don't consume — the item is a physical object, not a potion.
                 break;
         }
 
-        Inventory?.RemoveItem(item);
+        if (applied)
+            Inventory?.RemoveItem(item);
     }
 
     private EquipmentSlot? PickSlotFor(Item item)

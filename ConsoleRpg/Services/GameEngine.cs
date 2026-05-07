@@ -943,9 +943,31 @@ public class GameEngine
                 };
                 break;
             case "4":
-                Console.Write("Effect: ");
-                var effect = Console.ReadLine() ?? string.Empty;
-                Console.Write("Potency: ");
+                // W14 Phase B: Effect is a typed enum. The picker enumerates
+                // every defined ConsumableEffect so adding a new value to the
+                // enum (e.g., a Cure/Buff effect later) updates this prompt
+                // automatically — no menu drift.
+                Console.WriteLine("Effect:");
+                foreach (var ce in Enum.GetValues<ConsumableEffect>())
+                {
+                    var hint = ce switch
+                    {
+                        ConsumableEffect.None     => "no effect (key item / lockpick / non-effect)",
+                        ConsumableEffect.Heal     => "restores HP, capped at MaxHp",
+                        ConsumableEffect.Stamina  => "restores SP, capped at MaxSp",
+                        ConsumableEffect.BitPool  => "restores BitPool, capped at MaxBitPool",
+                        ConsumableEffect.BytePool => "restores BytePool, capped at MaxBytePool",
+                        _ => string.Empty,
+                    };
+                    Console.WriteLine($"  {(int)ce}. {ce} — {hint}");
+                }
+                Console.Write("Choice [0]: ");
+                var effect = int.TryParse(Console.ReadLine(), out var ec)
+                          && Enum.IsDefined(typeof(ConsumableEffect), ec)
+                    ? (ConsumableEffect)ec
+                    : ConsumableEffect.None;
+
+                Console.Write("Potency (magnitude added to the resource; ignored when Effect=None): ");
                 int.TryParse(Console.ReadLine(), out var potency);
                 item = new Consumable
                 {
@@ -1485,7 +1507,7 @@ public class GameEngine
             case Weapon w: Console.WriteLine($"  Weapon: {w.WeaponType}, AP {w.AttackPower}, Dur {w.Durability}"); break;
             case Shield s: Console.WriteLine($"  Shield: {s.WeightClass}, DR {s.DefenseRating}, Dur {s.Durability}"); break;
             case Armor a: Console.WriteLine($"  Armor: {a.WeightClass} {a.Slot}, DR {a.DefenseRating}, Dur {a.Durability}"); break;
-            case Consumable c: Console.WriteLine($"  Consumable: effect '{c.Effect}', potency {c.Potency}"); break;
+            case Consumable c: Console.WriteLine($"  Consumable: effect {c.Effect}, potency {c.Potency}"); break;
         }
     }
 

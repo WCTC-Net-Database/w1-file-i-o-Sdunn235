@@ -35,6 +35,47 @@ By completing this assignment, you will:
 
 ---
 
+## Design Deviations (Justified)
+
+This section logs deliberate engineering decisions made on the rolling
+codebase as W14 work proceeds. Following the same format as Module 13's
+README — each row is a place where I chose something different from the
+default/template approach and the reason it was the better call.
+
+### Pre-W14 polish — Consumable Effect refactor (Phase B)
+
+A pre-W14 cleanup pass landed before the schema work. The W13 codebase
+shipped with `Consumable.Effect` as a free-text `string`, and a quiet bug:
+unrecognized effect values silently consumed the item without producing
+any change. Phase B addressed both issues.
+
+| Old approach (W12/W13) | New approach (Phase B) | Reason |
+|---|---|---|
+| `Consumable.Effect` is `string`. Free text. Lowercased and switched on inside `Character.UseItem`. | `Consumable.Effect` is the typed `ConsumableEffect` enum (`None / Heal / Stamina / BitPool / BytePool`). | Eliminates magic strings (SOLID — the unlock algorithm depends on a stable abstraction, not a stringly-typed value). Makes the create-item menu a numbered picker that auto-updates when a new enum value is added. |
+| Unrecognized effect strings (typos, or rows where Effect was a *type discriminator* like `'keyitem'`/`'lockpick'`) fell through the switch — but the item was still consumed by the `Inventory.RemoveItem` call outside the switch. Silent no-op. | `UseItem` tracks an `applied` flag inside the switch; consumption only fires when a real effect was applied. `ConsumableEffect.None` rows are intentionally non-consuming. | Compile-time exhaustiveness + behavior fix. Iron Lockpicks (which were stored as `Effect = "lockpick"` Consumable rows) no longer "vanish" on accidental use-item attempts. |
+| `Effect = "keyitem"` and `Effect = "lockpick"` overloaded the column with type-discriminator meaning on rows already discriminated as `Consumable`. | Phase B: those rows are migrated to `ConsumableEffect.None` so the column means *only* "what does this consumable do." Phase C will move them to a proper `KeyItem : Item` TPH subclass and drop `Item.IsKeyItem`. | One smell at a time. Phase B narrows `Effect`'s contract; Phase C removes the rows that don't belong here. The composability is the story — each commit removes one ambiguity without bleeding into the next. |
+| Migration scaffolded as plain `AlterColumn(string -> int)`, which would fail on SQL Server (can't cast `'heal'` to `int`). | Hand-edited `W14_ConvertConsumableEffectToEnum` migration: temp `EffectNew` column with `DEFAULT 0` → `CASE LOWER(Effect)` backfill → drop legacy → rename. Reverse mapping in Down. | Same hand-edit pattern from W11's Goblin-discriminator migration. Default constraint dropped at end of Up to avoid a dangling `DF_Items_EffectNew` constraint name on a column called `Effect` (future-reader crisis prevention). |
+
+**Verification SQL** (run against `w9_efcore_SDunn` after the migration applies):
+
+```sql
+SELECT Name, Effect, Potency, IsKeyItem
+FROM Items
+WHERE ItemType = 'Consumable'
+ORDER BY Effect, Name;
+```
+
+Expected:
+- `Healing Potion`, `Lesser Healing Draught`, `Antidote` → `Effect = 1` (Heal)
+- `Stamina Draught`, `Gobbo's Stew` → `Effect = 2` (Stamina)
+- `Elixir of the Wakeful` → `Effect = 4` (BytePool)
+- `Old Brass Key`, `Dungeon Key`, `Iron Lockpick #1`, `Iron Lockpick #2` → `Effect = 0` (None — these are Phase C's KeyItem candidates)
+
+### W14 implementation deviations
+*(to be filled as W14 schema and graded LINQ work proceeds)*
+
+---
+
 ## What's New This Week
 
 | Concept | Description |
