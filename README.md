@@ -71,6 +71,23 @@ Expected:
 - `Elixir of the Wakeful` → `Effect = 4` (BytePool)
 - `Old Brass Key`, `Dungeon Key`, `Iron Lockpick #1`, `Iron Lockpick #2` → `Effect = 0` (None — these are Phase C's KeyItem candidates)
 
+### Pre-W14 polish — W12 unique-index filter fix (Phase B.1)
+
+A latent bug in `W12_InventoryAndSeed` slept until Phase 1.5 (C0020) put
+multiple Equipment rows in the database — Phase B's first end-to-end test
+was the trigger, not the cause.
+
+| Old approach (W12) | New approach (Phase B.1) | Reason |
+|---|---|---|
+| `IX_Containers_Inventory_OwnerCharacterId` had `column: "Inventory_OwnerCharacterId"` (correct) but `filter: "[OwnerCharacterId] IS NOT NULL"` (wrong column). The filter included every Equipment row, all of which have `Inventory_OwnerCharacterId = NULL`. With one Equipment row (Elara) the unique index tolerated a single NULL key; with two it crashed: *"Cannot insert duplicate key row ... duplicate key value is (NULL)."* | `W14_FixContainerInventoryIndexFilter` migration drops the broken index and recreates with `filter: "[Inventory_OwnerCharacterId] IS NOT NULL"`. Companion `IX_Containers_OwnerCharacterId` was already correct (column and filter agree); only the Inventory side needed repair. | EF's TPH disambiguation auto-generated two FK columns (`OwnerCharacterId` for Equipment, `Inventory_OwnerCharacterId` for Inventory). The filter clause must reference the index's own column, not its TPH sibling's. Fixed forward — the W14 Room subclass is naturally excluded from both indexes since Rooms have NULL on both columns. |
+
+**Lesson captured to Claude memory:** "Test functional before committing."
+Build-green + migration-applied is necessary but not sufficient — the
+verification is exercising the affected code path end-to-end. C0022 was
+committed without a `dotnet run` test; the latent W12 bug surfaced
+moments later. Going forward, runtime-affecting commits get a manual
+exercise pass before the commit lands.
+
 ### W14 implementation deviations
 *(to be filled as W14 schema and graded LINQ work proceeds)*
 
