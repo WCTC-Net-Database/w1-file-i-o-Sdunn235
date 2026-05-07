@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "w13-chest-loot": {
+    "w14-doors-locks": {
       "commandName": "Project",
       "workingDirectory": "$(ProjectDir)",
       "environmentVariables": {
