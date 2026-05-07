@@ -89,7 +89,28 @@ moments later. Going forward, runtime-affecting commits get a manual
 exercise pass before the commit lands.
 
 ### W14 implementation deviations
-*(to be filled as W14 schema and graded LINQ work proceeds)*
+
+#### Phase C.1 — Room as 5th Container TPH subclass
+
+| Template / default approach | My implementation | Reason |
+|---|---|---|
+| EF scaffolded `DropTable("Rooms")` outright. Would have lost all room data and orphaned `Character.RoomId`, `Door.SourceRoomId`/`DestinationRoomId`, and `Chest.RoomId`. | Hand-edited migration uses `MERGE...OUTPUT INTO #RoomMap` to atomically insert each Room into Containers as a `ContainerType='Room'` discriminator while capturing the old→new id mapping. Then UPDATE every FK column via the mapping before dropping the old Rooms table. | Preserves Antechamber + Vault (and any future authored rooms) through the schema change. The mapping pattern is reusable for future TPH promotions. |
+| Both `Character.RoomId` and `Chest.RoomId` keep `OnDelete(SetNull)` after pointing at the new Containers table. | Changed both to `NoAction`. | Combining two `SetNull` cascades on a self-referential `Containers` table triggers SQL Server's "multiple cascade paths" guard (error 1785). `RemoveRoom` in `GameEngine` already explicitly nulls Character.RoomId, removes connected Doors, and cleans Chest.RoomId before the actual delete, so DB cascade isn't load-bearing. |
+| Room kept in `Models/Room.cs` (its original location, alongside Character/Door/etc.). | Moved Room to `Models/Containers/Room.cs` to live with its TPH siblings (Inventory, Equipment, Chest, MonsterLoot). Door updated with the new `using ConsoleRpgEntities.Models.Containers;`. | Code organization follows the data model: containers live together. One-line consumer change worth the structural clarity. |
+| `Description` column collides with `Chest.Description` in TPH. | Let EF auto-shadow as `Room_Description` (the "Room_Description quirk" the W14 README mentions). Documented in the Room.cs XML doc so future readers don't trip on raw SQL. | Default EF behavior; cleaner than custom `[Column]` overrides. Cost is one quirk to remember; benefit is no schema customization. |
+
+**Verification:** App starts clean; integrity sweep runs; Room list (menu 3 →
+1) shows Antechamber + Vault preserved; characters and chests still know
+their room. Floor-items semantics now available via `room.AddItem(item)` and
+`room.ItemsCollection` — same shape as backpacks, chests, equipment slots,
+and monster loot. The "Room IS a Container" idea is the literal data model.
+
+**Composability tee-up for Phase C.2:** Door currently has
+`SourceRoomId/DestinationRoomId/Direction` (directional pair model — two
+rows per bidirectional passage). Phase C.2 will refactor to bidirectional
+(`RoomAId/RoomBId`, single row per passage) and implement `ILockable`,
+turning Door into the structural cousin of Chest under one shared
+lock/trap interface.
 
 ---
 

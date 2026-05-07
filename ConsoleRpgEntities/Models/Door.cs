@@ -1,3 +1,4 @@
+using ConsoleRpgEntities.Models.Containers;
 using ConsoleRpgEntities.Models.Enums;
 
 namespace ConsoleRpgEntities.Models;

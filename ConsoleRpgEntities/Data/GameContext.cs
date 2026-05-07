@@ -99,19 +99,31 @@ public class GameContext : DbContext, IContext
             .HasValue<Consumable>("Consumable");
 
         // --- Container TPH ---
+        // W14 Phase C.1: Room joins Inventory/Equipment/Chest/MonsterLoot under
+        // the Containers table. Items on the floor of a room are now stored the
+        // same way as items in any other container — same Items table, same
+        // ContainerId FK, same Container.AddItem/RemoveItem semantics.
         modelBuilder.Entity<Container>()
             .HasDiscriminator<string>("ContainerType")
             .HasValue<Inventory>("Inventory")
             .HasValue<Equipment>("Equipment")
             .HasValue<Chest>("Chest")           // W13
-            .HasValue<MonsterLoot>("MonsterLoot"); // W13
+            .HasValue<MonsterLoot>("MonsterLoot")  // W13
+            .HasValue<Room>("Room");            // W14 Phase C.1
 
-        // W13 — Chest → Room (many-to-one, nullable)
+        // W13 — Chest → Room (many-to-one, nullable).
+        // W14 Phase C.1: changed from SetNull to NoAction. After Room joined
+        // Containers via TPH, SetNull on Chest.RoomId combined with SetNull
+        // on Character.RoomId produced a SQL Server "multiple cascade paths"
+        // error (Containers self-referencing through both FKs). NoAction
+        // pushes cleanup responsibility to the application — RemoveRoom in
+        // GameEngine already nulls Chest.RoomId / Character.RoomId and
+        // removes connected Doors before the actual delete.
         modelBuilder.Entity<Chest>()
             .HasOne(c => c.Room)
             .WithMany()
             .HasForeignKey(c => c.RoomId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
 
         // W13 — Npc → MonsterLoot (one-to-one, nullable)
         modelBuilder.Entity<Npc>()
@@ -169,12 +181,13 @@ public class GameContext : DbContext, IContext
             .HasForeignKey(c => c.RaceId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Character → Room (many-to-one, nullable)
+        // Character → Room (many-to-one, nullable).
+        // W14 Phase C.1: NoAction (was SetNull) — see Chest→Room comment above.
         modelBuilder.Entity<Character>()
             .HasOne(c => c.Room)
             .WithMany(r => r.Characters)
             .HasForeignKey(c => c.RoomId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
 
         // Character ↔ Ability (many-to-many via CharacterAbilities)
         modelBuilder.Entity<Character>()
