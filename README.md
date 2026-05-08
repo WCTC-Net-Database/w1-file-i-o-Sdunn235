@@ -90,6 +90,27 @@ exercise pass before the commit lands.
 
 ### W14 implementation deviations
 
+#### Pre-W14-grading polish — committed default points at LocalDB
+
+`appsettings.json` (the committed, public default) used to point at
+`bitsql.wctc.edu` with `User Id=PLACEHOLDER`/`Password=PLACEHOLDER`,
+which meant a fresh clone couldn't run anything until the cloner
+manually created a `appsettings.Development.json` with credentials.
+Switched to:
+
+```json
+"GameDb": "Server=(localdb)\\MSSQLLocalDB;Database=w9_efcore_SDunn;Trusted_Connection=True;TrustServerCertificate=True;"
+```
+
+A grader who clones the repo on a Windows machine with Visual Studio
+(LocalDB ships with VS) can now run `dotnet ef database update` and
+`dotnet run` immediately — no credential setup, no school VPN.
+Real credentials (or alternate DB targets) still live in the
+gitignored `appsettings.Development.json` for whoever needs them.
+Triggered by a school-side server outage that made
+`bitsql.wctc.edu` unreachable; landed as a separate single-file commit
+to keep history clean.
+
 #### Phase C.2 — Door bidirectional + ILockable
 
 After Phase C.1 made Room a Container subclass, the Door entity still
