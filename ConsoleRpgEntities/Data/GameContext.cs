@@ -222,17 +222,20 @@ public class GameContext : DbContext, IContext
             .HasForeignKey(es => es.EquippedItemId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // --- Door → Room (two FKs, Restrict to prevent cascade conflicts) ---
+        // --- Door ↔ Room (bidirectional; one Door row per passage) ---
+        // W14 Phase C.2: Door is bidirectional. Two FKs to Room (RoomA/RoomB)
+        // each map to a Room.DoorsAsA / DoorsAsB collection. Restrict on
+        // delete — RemoveRoom handles cleanup application-side.
         modelBuilder.Entity<Door>()
-            .HasOne(d => d.SourceRoom)
-            .WithMany(r => r.Doors)
-            .HasForeignKey(d => d.SourceRoomId)
+            .HasOne(d => d.RoomA)
+            .WithMany(r => r.DoorsAsA)
+            .HasForeignKey(d => d.RoomAId)
             .OnDelete(DeleteBehavior.Restrict);
 
         modelBuilder.Entity<Door>()
-            .HasOne(d => d.DestinationRoom)
-            .WithMany()
-            .HasForeignKey(d => d.DestinationRoomId)
+            .HasOne(d => d.RoomB)
+            .WithMany(r => r.DoorsAsB)
+            .HasForeignKey(d => d.RoomBId)
             .OnDelete(DeleteBehavior.Restrict);
 
         base.OnModelCreating(modelBuilder);

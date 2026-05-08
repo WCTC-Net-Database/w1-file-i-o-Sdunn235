@@ -90,6 +90,39 @@ exercise pass before the commit lands.
 
 ### W14 implementation deviations
 
+#### Phase C.2 — Door bidirectional + ILockable
+
+After Phase C.1 made Room a Container subclass, the Door entity still
+modeled passages as a *directional pair*: `SourceRoomId` + `DestinationRoomId`
++ a `Direction` enum, with two rows per bidirectional passage (one
+"north from A to B," another "south from B to A"). That model leaks
+the schema's bookkeeping into player UX ("go north" must consult the
+right row depending on which side you're standing on) and makes lock
+state a sync problem (lock both rows or risk one-way locked doors).
+
+| Old approach (W11/W13) | New approach (Phase C.2) | Reason |
+|---|---|---|
+| Door has `SourceRoomId`/`DestinationRoomId`/`Direction`; two rows per passage. | Door has `RoomAId`/`RoomBId`; one row per passage. `MovePlayer` shows the player a list of doors in the current room and lets them pick. | Single source of truth for lock/trap state per passage. UX freed from the schema's old shape — "the player sees doors, not directions." Stronger LSP narrative for Phase C.4: doors and chests both have ONE state object, not a pair. |
+| Direction enum lived on the Door entity. | Direction column dropped. The door doesn't *have* a direction; navigation is relative to the character's current room. | Every door in a bidirectional model has two valid "directions" depending on which side you're on. Encoding only one is leaky; encoding both is redundant. The simpler answer is to drop the concept entirely. |
+| `MovePlayer` matched `door.Direction == requested` to find the door for "go north." Required Direction enum to remain meaningful. | `Door.GetOtherRoom(currentRoom)` returns the room on the opposite side from where the character is now. `MovePlayer` asks the door directly. | **GRASP information-expert pattern** (Shawn's design call): the Door owns its endpoints, so it answers "which side is opposite mine." `MovePlayer` doesn't reason about A vs B — it hands the door the current room and uses the result. The class with the data does the work. |
+| EF scaffolded the migration as `RenameColumn(SourceRoomId → UnlockDC)` because both columns are int. | Hand-edited migration: `DropColumn(Direction)` first, then `RenameColumn(SourceRoomId → RoomAId)` and `RenameColumn(DestinationRoomId → RoomBId)`, then add the eight new ILockable + secret-door fields with sensible defaults. | EF scaffolds by *type compatibility*, not semantic intent. `SourceRoomId` (FK int) and `UnlockDC` (lock difficulty int) happen to share a type but mean wildly different things; the scaffolded version would have moved Room IDs into a difficulty-class field. Reviewing every scaffolded migration is non-negotiable. |
+| Door had only `IsLocked`. | Door implements `ILockable`: `IsLocked`, `IsTrapped`, `IsPickable`, `RequiredKeyId`, `TrapDamage`, `TrapDisarmed`, `UnlockDC`, plus stretch fields `IsSecret` / `IsDiscovered` (with computed `IsVisible`). | Door is now the structural cousin of Chest. Phase C.4's `TryUnlock(ILockable, ...)` LSP refactor will exercise this — the same unlock algorithm will work for chests and doors with zero duplication. The W14 README's "single tiny change" payoff lands here. |
+
+**Verification (against fresh LocalDB):** all 12 migrations applied
+clean. Antechamber + Vault present after C.1's MERGE-based seed
+preservation. Adding a test door between them via menu 3 → 5 → 2
+prompts for Room A / Room B / Name / Description / Locked? / Secret?
+(no Direction). Moving an active character via menu 3 → 7 lists doors
+by name with destination, no direction prompt. Grubnak's looted
+inventory still surfaces correctly through the Phase 1.5 → B → B.1 →
+C.1 chain.
+
+**Composability tee-up for Phase C.3:** Door has `RequiredKeyId` (string),
+matching Chest's. Phase C.3 extracts `KeyItem : Item` so this column
+joins to a typed entity instead of a free-text identifier — the last
+"keys are stringly typed" smell goes away in the same commit that
+finally drops `Item.IsKeyItem`.
+
 #### Phase C.1 — Room as 5th Container TPH subclass
 
 | Template / default approach | My implementation | Reason |

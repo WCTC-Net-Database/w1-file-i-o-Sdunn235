@@ -41,8 +41,19 @@ public class Room : Container
     /// <c>Character.RoomId</c> back-reference.</summary>
     public virtual ICollection<Character> Characters { get; set; } = new List<Character>();
 
-    /// <summary>Doors leaving this room. After Phase C.2, doors are
-    /// bidirectional — a Door between Room A and Room B appears in both
-    /// rooms' <see cref="Doors"/> collections via the RoomA/RoomB join.</summary>
-    public virtual ICollection<Door> Doors { get; set; } = new List<Door>();
+    /// <summary>Doors where this room is the A endpoint. See also
+    /// <see cref="DoorsAsB"/>. EF can't map a single collection to two FKs,
+    /// so the relationship is split — consumers usually want
+    /// <see cref="AllDoors"/> instead.</summary>
+    public virtual ICollection<Door> DoorsAsA { get; set; } = new List<Door>();
+
+    /// <summary>Doors where this room is the B endpoint. See also
+    /// <see cref="DoorsAsA"/>.</summary>
+    public virtual ICollection<Door> DoorsAsB { get; set; } = new List<Door>();
+
+    /// <summary>All doors connected to this room, regardless of which side.
+    /// Use this in display and navigation; the A/B distinction is only
+    /// meaningful for the FK relationship.</summary>
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public IEnumerable<Door> AllDoors => DoorsAsA.Concat(DoorsAsB);
 }

@@ -746,10 +746,18 @@ public class GameEngine
                     Console.WriteLine($"      · {c.Name} ({c.TypeName}, Lv {c.Level})");
             }
 
-            if (r.Doors.Any())
+            // Editor view: show ALL doors including undiscovered secrets.
+            var allDoors = r.AllDoors.ToList();
+            if (allDoors.Any())
             {
-                foreach (var d in r.Doors)
-                    Console.WriteLine($"      {d.Direction} → {d.DestinationRoom.Name}{(d.IsLocked ? " [LOCKED]" : "")}");
+                foreach (var d in allDoors)
+                {
+                    var other = d.GetOtherRoom(r);
+                    var flags = (d.IsLocked ? " [LOCKED]" : "")
+                              + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "")
+                              + (d.IsSecret ? (d.IsDiscovered ? " [secret-found]" : " [SECRET]") : "");
+                    Console.WriteLine($"      → {d.Name} → {other.Name}{flags}");
+                }
             }
         }
     }
@@ -773,40 +781,41 @@ public class GameEngine
     {
         DisplayRooms();
 
-        Console.Write("Source room ID: ");
-        if (!int.TryParse(Console.ReadLine(), out var sourceId)) { Console.WriteLine("Invalid."); return; }
+        Console.Write("Room A ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var roomAId)) { Console.WriteLine("Invalid."); return; }
 
-        Console.Write("Destination room ID: ");
-        if (!int.TryParse(Console.ReadLine(), out var destId)) { Console.WriteLine("Invalid."); return; }
+        Console.Write("Room B ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var roomBId)) { Console.WriteLine("Invalid."); return; }
 
-        Console.Write("Direction (North/South/East/West/Up/Down): ");
-        var dirInput = Console.ReadLine() ?? string.Empty;
-        if (!Enum.TryParse<Direction>(dirInput, true, out var direction))
-        {
-            Console.WriteLine("Invalid direction.");
-            return;
-        }
+        if (roomAId == roomBId) { Console.WriteLine("A door must connect two different rooms."); return; }
 
         Console.Write("Door name (e.g., 'Oak Door'): ");
         var name = Console.ReadLine() ?? string.Empty;
 
+        Console.Write("Description: ");
+        var desc = Console.ReadLine() ?? string.Empty;
+
         Console.Write("Locked? (y/n): ");
         bool locked = (Console.ReadLine()?.Trim().ToLower() ?? "") == "y";
+
+        Console.Write("Secret? (y/n): ");
+        bool secret = (Console.ReadLine()?.Trim().ToLower() ?? "") == "y";
 
         var door = new Door
         {
             Name = name,
-            Description = $"A passage leading {direction}",
-            Direction = direction,
+            Description = desc,
             IsLocked = locked,
-            SourceRoomId = sourceId,
-            DestinationRoomId = destId
+            IsSecret = secret,
+            IsDiscovered = !secret, // secret doors start undiscovered; non-secret are always visible
+            RoomAId = roomAId,
+            RoomBId = roomBId
         };
 
         _dbContext.AddEntity(door);
         _dbContext.SaveChanges();
 
-        Console.WriteLine($"\nDoor '{name}' connects Room {sourceId} → Room {destId} ({direction}).");
+        Console.WriteLine($"\nDoor '{name}' connects Room {roomAId} ↔ Room {roomBId}.");
     }
 
     public void DisplayCurrentRoom()
@@ -827,15 +836,23 @@ public class GameEngine
                 Console.WriteLine($"    {c.Name} ({c.TypeName})");
         }
 
-        if (room.Doors.Any())
+        // Player view: hide undiscovered secret doors.
+        var visibleDoors = room.AllDoors.Where(d => d.IsVisible).ToList();
+        if (visibleDoors.Any())
         {
             Console.WriteLine("\n  Exits:");
-            foreach (var d in room.Doors)
-                Console.WriteLine($"    {d.Direction} — {d.Name} → {d.DestinationRoom.Name}{(d.IsLocked ? " [LOCKED]" : "")}");
+            for (int i = 0; i < visibleDoors.Count; i++)
+            {
+                var d = visibleDoors[i];
+                var other = d.GetOtherRoom(room);
+                var flags = (d.IsLocked ? " [LOCKED]" : "")
+                          + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "");
+                Console.WriteLine($"    [{i + 1}] {d.Name} → {other.Name}{flags}");
+            }
         }
         else
         {
-            Console.WriteLine("\n  No exits.");
+            Console.WriteLine("\n  No visible exits.");
         }
     }
 
@@ -847,20 +864,17 @@ public class GameEngine
 
         DisplayCurrentRoom();
 
-        Console.Write("\nDirection to move: ");
-        var dirInput = Console.ReadLine() ?? string.Empty;
-        if (!Enum.TryParse<Direction>(dirInput, true, out var direction))
+        var visibleDoors = player.Room.AllDoors.Where(d => d.IsVisible).ToList();
+        if (!visibleDoors.Any()) { Console.WriteLine("\nNo doors to take."); return; }
+
+        Console.Write("\nDoor number to take (or 0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine(), out var choice) || choice < 1 || choice > visibleDoors.Count)
         {
-            Console.WriteLine("Invalid direction.");
+            Console.WriteLine("Cancelled.");
             return;
         }
 
-        var door = player.Room.Doors.FirstOrDefault(d => d.Direction == direction);
-        if (door is null)
-        {
-            Console.WriteLine($"\nNo exit to the {direction}.");
-            return;
-        }
+        var door = visibleDoors[choice - 1];
 
         if (door.IsLocked)
         {
@@ -868,10 +882,11 @@ public class GameEngine
             return;
         }
 
-        player.RoomId = door.DestinationRoomId;
+        var destination = door.GetOtherRoom(player.Room);
+        player.RoomId = destination.Id;
         _dbContext.SaveChanges();
 
-        Console.WriteLine($"\n{player.Name} moves {direction} through the {door.Name}.");
+        Console.WriteLine($"\n{player.Name} passes through the {door.Name} into {destination.Name}.");
         DisplayCurrentRoom();
     }
 
@@ -1629,7 +1644,7 @@ public class GameEngine
         // Snapshot dependents before mutation.
         var chestsHere = _dbContext.Containers.OfType<Chest>().Where(c => c.RoomId == room.Id).ToList();
         var doorsTouching = _dbContext.Doors
-            .Where(d => d.SourceRoomId == room.Id || d.DestinationRoomId == room.Id)
+            .Where(d => d.RoomAId == room.Id || d.RoomBId == room.Id)
             .ToList();
         var charactersHere = _dbContext.Characters.Where(c => c.RoomId == room.Id).ToList();
 
@@ -1686,7 +1701,12 @@ public class GameEngine
         if (!doors.Any()) { Console.WriteLine("\nNo doors."); return; }
         Console.WriteLine("\n--- Doors ---");
         foreach (var d in doors)
-            Console.WriteLine($"  [{d.Id}] {d.Name}: {d.SourceRoom.Name} —{d.Direction}→ {d.DestinationRoom.Name}{(d.IsLocked ? " [LOCKED]" : "")}");
+        {
+            var flags = (d.IsLocked ? " [LOCKED]" : "")
+                      + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "")
+                      + (d.IsSecret ? (d.IsDiscovered ? " [secret-found]" : " [SECRET]") : "");
+            Console.WriteLine($"  [{d.Id}] {d.Name}: {d.RoomA.Name} ↔ {d.RoomB.Name}{flags}");
+        }
     }
 
     private Door? PromptDoor(string verb)
