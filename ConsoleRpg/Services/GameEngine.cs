@@ -1493,8 +1493,15 @@ public class GameEngine
         Console.WriteLine("\n--- Items ---");
         foreach (var i in items.OrderBy(i => i.TypeNameForItem()).ThenBy(i => i.Name))
         {
-            string container = i.ContainerId.HasValue ? $"container #{i.ContainerId}" : "(unowned)";
-            Console.WriteLine($"  [{i.Id}] {i.Name} — {i.TypeNameForItem()}, {i.Weight} lbs, {i.Value}g — {container}");
+            // Lazy-loading proxies materialize i.Container on access. Show the
+            // container's display name (Inventory: "Elara's Pack", Chest:
+            // "Wooden Chest", Room: "Antechamber", etc.) under a single
+            // "Owner" label per Shawn's call — works whether the container is
+            // a person, a vessel, a room, or any future thing-that-holds-items.
+            string ownerLabel = i.Container is { } c
+                ? $"Owner: {c.Name}"
+                : "Unowned";
+            Console.WriteLine($"  [{i.Id}] {i.Name} — {i.TypeNameForItem()}, {i.Weight} lbs, {i.Value}g — {ownerLabel}");
         }
     }
 

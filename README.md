@@ -90,6 +90,30 @@ exercise pass before the commit lands.
 
 ### W14 implementation deviations
 
+#### Polish — Item listing shows Owner name, not raw container ID
+
+`ListItems` (Menu 2 → 1) used to print `container #5` next to every
+item — surfacing the FK directly to the user, which is unreadable and
+leaks schema. Now reads the container's polymorphic `.Name` and labels
+it `Owner`:
+
+```
+[3] Healing Potion — Consumable, 1 lbs, 25g — Owner: Elara's Pack
+[12] Iron Lockpick #1 — Consumable, 1 lbs, 5g — Owner: Elara's Pack
+[18] Dungeon Key — Consumable, 1 lbs, 0g — Owner: Grubnak's Pouch
+```
+
+The `Owner` label deliberately works across every Container subtype:
+characters' inventory bags, chests, monster loot, room floors, and any
+future thing-that-holds-items (a desk, a sword in the stone) — they
+all expose `Container.Name`, so the display is one-line polymorphic.
+The TPH that started in W12 is now paying for itself in UX.
+
+Lazy-loading proxies materialize the Container on access, so this
+costs N small queries on a list call — fine for the dev/editor menu;
+not worth pre-fetching with `Include` (per the project's standing rule
+against eager-loading).
+
 #### Pre-W14-grading polish — committed default points at LocalDB
 
 `appsettings.json` (the committed, public default) used to point at
