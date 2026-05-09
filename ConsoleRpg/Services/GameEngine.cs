@@ -701,6 +701,37 @@ public class GameEngine
                 Console.WriteLine($"  {cs.Skill.Name} — Proficiency: {cs.Proficiency} (Primary: {cs.Skill.PrimaryAttribute})");
         }
 
+        // --- Inventory (between Skills and Equipment per Shawn's call) ---
+        // Carrying line shows the encumbrance fix from C0029: the character's
+        // total carried weight is bag + equipped gear, not just bag. Both
+        // contributors are itemized so the player can see where the weight
+        // is actually living.
+        if (character.Inventory is not null)
+        {
+            int invWeight = character.Inventory.CurrentWeight;
+            int eqWeight = character.Equipment?.ItemsCollection.Sum(i => i.Weight) ?? 0;
+            int total = invWeight + eqWeight;
+            int cap = character.Inventory.MaxWeight;
+
+            Console.WriteLine($"\n  --- Inventory ---");
+            Console.WriteLine($"  Carrying: {total}/{cap} lbs total " +
+                              $"(bag: {invWeight}, worn: {eqWeight})");
+
+            if (character.Inventory.ItemsCollection.Any())
+            {
+                foreach (var item in character.Inventory.ItemsCollection
+                                              .OrderBy(i => i.TypeNameForItem())
+                                              .ThenBy(i => i.Name))
+                {
+                    Console.WriteLine($"  - {item.Name} ({item.TypeNameForItem()}, {item.Weight} lb, {item.Value}g)");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"  (bag empty)");
+            }
+        }
+
         if (character.EquipmentSlots.Any())
         {
             Console.WriteLine($"\n  --- Equipment ---");
@@ -1443,7 +1474,7 @@ public class GameEngine
             for (int i = 0; i < items.Count; i++)
             {
                 var item = items[i];
-                string fitsTag = looter.Inventory.CanFit(item.Weight) ? "" : "  [too heavy]";
+                string fitsTag = looter.CanCarry(item.Weight) ? "" : "  [too heavy]";
                 Console.WriteLine(
                     $"  [{i + 1}] {item.Name} — {item.TypeNameForItem()}, " +
                     $"{item.Weight} lb, {item.Value}g{fitsTag}");

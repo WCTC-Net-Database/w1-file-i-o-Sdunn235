@@ -74,10 +74,42 @@ public abstract class Character
     // Single shared d20 source for skill rolls (lockpicking, etc.).
     private static readonly Random _rng = new();
 
+    /// <summary>
+    /// Total weight a character is currently carrying — the sum of items in
+    /// their Inventory bag PLUS items in their Equipment slots. Worn gear
+    /// counts against carrying capacity by every standard RPG model.
+    ///
+    /// <para>Pre-fix (W12/W13): only Inventory was counted, so a character
+    /// could equip 50-lb plate + 30-lb greatsword and their bag still
+    /// reported empty.</para>
+    /// </summary>
+    public int TotalCarriedWeight()
+    {
+        int inv = Inventory?.ItemsCollection.Sum(i => i.Weight) ?? 0;
+        int eq = Equipment?.ItemsCollection.Sum(i => i.Weight) ?? 0;
+        return inv + eq;
+    }
+
+    /// <summary>
+    /// True if this character can carry an additional <paramref name="additionalWeight"/>
+    /// pounds without exceeding their carrying capacity (currently stored
+    /// as <see cref="Inventory.MaxWeight"/> — semantically the character's
+    /// total carry cap, not just the bag's volume).
+    ///
+    /// <para>Use this for any "can I take this item?" check; it accounts
+    /// for both worn and bagged weight. Replaces the bag-only
+    /// <c>Inventory.CanFit</c>.</para>
+    /// </summary>
+    public bool CanCarry(int additionalWeight)
+    {
+        if (Inventory is null) return false;
+        return TotalCarriedWeight() + additionalWeight <= Inventory.MaxWeight;
+    }
+
     public bool PickUp(Item item)
     {
         if (Inventory is null) return false;
-        if (!Inventory.CanFit(item.Weight)) return false;
+        if (!CanCarry(item.Weight)) return false;
 
         Inventory.AddItem(item);
         return true;
@@ -285,7 +317,7 @@ public abstract class Character
         if (item is null) throw new ArgumentNullException(nameof(item));
         if (Inventory is null) return false;
         if (!source.ItemsCollection.Contains(item)) return false;
-        if (!Inventory.CanFit(item.Weight)) return false;
+        if (!CanCarry(item.Weight)) return false;
 
         source.RemoveItem(item);
         Inventory.AddItem(item);
