@@ -90,6 +90,39 @@ exercise pass before the commit lands.
 
 ### W14 implementation deviations
 
+#### Polish — Loot output detail + interactive picker
+
+The W13 loot path summarized everything into "Looted N items from
+{source}" — a count without item names. Looting Grubnak told the player
+they got *something* but never *what*. Replaced the count-only output
+with a real RPG-style picker.
+
+**Architecture (SOLID + GRASP):**
+- New `Character.TakeItemFrom(Container source, Item item) → bool`.
+  Single-Responsibility primitive: move one item from any container
+  into this character's inventory, refuse on weight overflow, refuse
+  if the source doesn't contain it. The verb is "take," not "loot" —
+  so the same method serves chest looting, body looting, picking up
+  items off a room's floor (W14), and any future thing-that-holds-items.
+  Open/Closed: a new Container subclass needs zero changes here.
+- New `GameEngine.LootInteractive(looter, source, sourceLabel)`.
+  Numbered list of source items with weight + value tags; player picks
+  by number, types `all` to grab everything that fits, or `0` to leave.
+  Re-displays after each take. Items the looter can't fit show a
+  `[too heavy]` flag and are skipped on `all`. This is the *UX* layer
+  on top of `TakeItemFrom`.
+- Removed `Character.LootChest` and `Character.LootMonster`. Their only
+  callers (`ChestLoot`, `ChestLootMonster`) are rewritten to use
+  `LootInteractive`. No back-compat shim — single-source rule.
+
+**Behavior change:**
+- "Looted N items from Grubnak" → numbered picker showing every item
+  with name, type, weight, value, and a `[too heavy]` tag where it
+  applies. Each pick is named in the confirmation: "Took Iron Lockpick."
+- `MonsterLoot.IsLooted` is set when the player exits the picker
+  (chose `0` or the source was emptied), not when the count happens
+  to be > 0. "The body has been searched" semantics.
+
 #### Polish — Item listing shows Owner name, not raw container ID
 
 `ListItems` (Menu 2 → 1) used to print `container #5` next to every

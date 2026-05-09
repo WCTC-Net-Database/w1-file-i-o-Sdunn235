@@ -266,40 +266,29 @@ public abstract class Character
         return true;
     }
 
-    public int LootChest(Chest chest)
+    /// <summary>
+    /// Move a single item from any container into this character's inventory.
+    /// Returns true if the item was taken; false if the inventory can't fit
+    /// the item, the source doesn't contain it, or this character has no
+    /// inventory.
+    ///
+    /// <para>This is the generic primitive for *all* "I'm taking that
+    /// thing" actions — looting chests, looting bodies, picking items off
+    /// the floor of a room (W14), or any future container type. The UX
+    /// (interactive picker, batch "take all," etc.) is built on top of
+    /// this in <c>GameEngine</c>; the model just knows how to move one
+    /// item at a time and refuse if the move would violate a constraint.</para>
+    /// </summary>
+    public bool TakeItemFrom(Container source, Item item)
     {
-        if (chest is null) throw new ArgumentNullException(nameof(chest));
-        if (Inventory is null) return 0;
-        if (chest.IsLocked) return 0;
+        if (source is null) throw new ArgumentNullException(nameof(source));
+        if (item is null) throw new ArgumentNullException(nameof(item));
+        if (Inventory is null) return false;
+        if (!source.ItemsCollection.Contains(item)) return false;
+        if (!Inventory.CanFit(item.Weight)) return false;
 
-        int moved = 0;
-        var items = chest.ItemsCollection.ToList();
-        foreach (var item in items)
-        {
-            if (!Inventory.CanFit(item.Weight)) continue;
-            chest.RemoveItem(item);
-            Inventory.AddItem(item);
-            moved++;
-        }
-        return moved;
-    }
-
-    public int LootMonster(Npc monster)
-    {
-        if (monster is null) throw new ArgumentNullException(nameof(monster));
-        if (Inventory is null) return 0;
-        if (monster.Loot is null || monster.Loot.IsLooted) return 0;
-
-        int moved = 0;
-        var items = monster.Loot.ItemsCollection.ToList();
-        foreach (var item in items)
-        {
-            if (!Inventory.CanFit(item.Weight)) continue;
-            monster.Loot.RemoveItem(item);
-            Inventory.AddItem(item);
-            moved++;
-        }
-        monster.Loot.IsLooted = true;
-        return moved;
+        source.RemoveItem(item);
+        Inventory.AddItem(item);
+        return true;
     }
 }

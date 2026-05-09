@@ -1373,9 +1373,8 @@ public class GameEngine
         if (chest is null) return;
         if (chest.IsLocked) { Console.WriteLine("\nLocked. Unlock first."); return; }
 
-        int moved = player.LootChest(chest);
+        LootInteractive(player, chest, $"Inside {chest.Name}");
         _dbContext.SaveChanges();
-        Console.WriteLine($"\nLooted {moved} item(s) from {chest.Name}.");
     }
 
     private void ChestLootMonster(Character player)
@@ -1401,9 +1400,93 @@ public class GameEngine
         var monster = monsters.FirstOrDefault(m => m.Id == id);
         if (monster is null) { Console.WriteLine("Not in this room."); return; }
 
-        int moved = player.LootMonster(monster);
+        if (monster.Loot is null) { Console.WriteLine("\nNothing to loot."); return; }
+
+        LootInteractive(player, monster.Loot, $"On {monster.Name}'s body");
+        // Mark as searched once the player exits the picker — the body's been
+        // processed, even if items were left behind because the looter
+        // couldn't carry them.
+        monster.Loot.IsLooted = true;
         _dbContext.SaveChanges();
-        Console.WriteLine($"\nLooted {moved} item(s) from {monster.Name}.");
+    }
+
+    /// <summary>
+    /// Interactive loot picker. Shows the source container's items in a
+    /// numbered list with weight + value tags; player picks individual
+    /// items by number, types "all" to grab everything that fits, or 0
+    /// to leave. Re-displays after each take so the player sees the
+    /// updated state. Items the looter can't fit show a [too heavy] tag
+    /// and are skipped on "all".
+    ///
+    /// Reusable across chests, monster loot, room floors (W14), and any
+    /// future Container subclass — the picker only knows about
+    /// <see cref="Container"/> and <see cref="Character.TakeItemFrom"/>.
+    /// </summary>
+    private static void LootInteractive(Character looter, Container source, string sourceLabel)
+    {
+        if (looter.Inventory is null)
+        {
+            Console.WriteLine("\nThis character has no inventory to loot into.");
+            return;
+        }
+
+        while (true)
+        {
+            var items = source.ItemsCollection.ToList();
+            if (!items.Any())
+            {
+                Console.WriteLine($"\n{sourceLabel}: empty.");
+                return;
+            }
+
+            Console.WriteLine($"\n--- {sourceLabel} ---");
+            for (int i = 0; i < items.Count; i++)
+            {
+                var item = items[i];
+                string fitsTag = looter.Inventory.CanFit(item.Weight) ? "" : "  [too heavy]";
+                Console.WriteLine(
+                    $"  [{i + 1}] {item.Name} — {item.TypeNameForItem()}, " +
+                    $"{item.Weight} lb, {item.Value}g{fitsTag}");
+            }
+            Console.Write("Take which? (number / 'all' / 0 to leave): ");
+            var input = Console.ReadLine()?.Trim().ToLowerInvariant() ?? "";
+
+            if (input == "0" || input == "")
+                return;
+
+            if (input == "all")
+            {
+                var taken = new List<Item>();
+                foreach (var item in items)
+                {
+                    if (looter.TakeItemFrom(source, item))
+                        taken.Add(item);
+                }
+                if (taken.Count > 0)
+                {
+                    Console.WriteLine($"\nTook {taken.Count} item(s):");
+                    foreach (var t in taken)
+                        Console.WriteLine($"  - {t.Name}");
+                }
+                else
+                {
+                    Console.WriteLine("\nCouldn't take anything (weight?).");
+                }
+                continue;
+            }
+
+            if (int.TryParse(input, out var idx) && idx >= 1 && idx <= items.Count)
+            {
+                var picked = items[idx - 1];
+                if (looter.TakeItemFrom(source, picked))
+                    Console.WriteLine($"\nTook {picked.Name}.");
+                else
+                    Console.WriteLine($"\nCouldn't take {picked.Name} — too heavy.");
+                continue;
+            }
+
+            Console.WriteLine("Invalid choice.");
+        }
     }
 
     // ---- Graded LINQ Task A: Richest locked chest ----
