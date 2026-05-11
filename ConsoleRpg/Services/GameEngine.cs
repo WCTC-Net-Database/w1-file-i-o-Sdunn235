@@ -1026,9 +1026,80 @@ public class GameEngine
                 return;
         }
 
+        PromptItemPlacement(item);
+
         _dbContext.AddEntity(item);
         _dbContext.SaveChanges();
-        Console.WriteLine($"\n{item.TypeNameForItem()} '{name}' created.");
+
+        var where = item.ContainerId is null
+            ? "unowned"
+            : $"in container #{item.ContainerId}";
+        Console.WriteLine($"\n{item.TypeNameForItem()} '{name}' created ({where}).");
+    }
+
+    // After-creation placement picker. Sets ContainerId on the new Item so it
+    // lands in a Chest / MonsterLoot / Room floor / Character inventory in the
+    // same step it's created — instead of always saving as ContainerId=NULL
+    // and forcing a table edit to seed test scenarios (encumbrance, loot,
+    // floor pickup). Item is not yet attached to the context; setting the FK
+    // is enough — EF inserts with that container reference on SaveChanges.
+    private void PromptItemPlacement(Item item)
+    {
+        Console.WriteLine("\nPlace this item:");
+        Console.WriteLine("  0. Unowned (default)");
+        Console.WriteLine("  1. Character inventory");
+        Console.WriteLine("  2. Chest");
+        Console.WriteLine("  3. Monster loot");
+        Console.WriteLine("  4. Room floor   (no in-game pickup UI yet — seeding only)");
+        Console.Write("Choice [0]: ");
+        var choice = Console.ReadLine()?.Trim();
+
+        switch (choice)
+        {
+            case "1":
+                var chars = _dbContext.Characters.Where(c => c.Inventory != null).ToList();
+                if (chars.Count == 0) { Console.WriteLine("  No characters with inventories."); return; }
+                for (int i = 0; i < chars.Count; i++)
+                    Console.WriteLine($"  {i + 1}. {chars[i].Name}  (bag: {chars[i].Inventory!.Name})");
+                Console.Write("Pick: ");
+                if (int.TryParse(Console.ReadLine(), out var ci) && ci >= 1 && ci <= chars.Count)
+                    item.ContainerId = chars[ci - 1].Inventory!.Id;
+                else Console.WriteLine("  Invalid — left unowned.");
+                break;
+
+            case "2":
+                var chests = _dbContext.Containers.OfType<Chest>().ToList();
+                if (chests.Count == 0) { Console.WriteLine("  No chests exist."); return; }
+                for (int i = 0; i < chests.Count; i++)
+                    Console.WriteLine($"  {i + 1}. {chests[i].Name}  (Id {chests[i].Id})");
+                Console.Write("Pick: ");
+                if (int.TryParse(Console.ReadLine(), out var chi) && chi >= 1 && chi <= chests.Count)
+                    item.ContainerId = chests[chi - 1].Id;
+                else Console.WriteLine("  Invalid — left unowned.");
+                break;
+
+            case "3":
+                var loots = _dbContext.Containers.OfType<MonsterLoot>().ToList();
+                if (loots.Count == 0) { Console.WriteLine("  No monster loot containers exist."); return; }
+                for (int i = 0; i < loots.Count; i++)
+                    Console.WriteLine($"  {i + 1}. {loots[i].Name}  (Id {loots[i].Id})");
+                Console.Write("Pick: ");
+                if (int.TryParse(Console.ReadLine(), out var li) && li >= 1 && li <= loots.Count)
+                    item.ContainerId = loots[li - 1].Id;
+                else Console.WriteLine("  Invalid — left unowned.");
+                break;
+
+            case "4":
+                var rooms = _dbContext.Containers.OfType<Room>().ToList();
+                if (rooms.Count == 0) { Console.WriteLine("  No rooms exist."); return; }
+                for (int i = 0; i < rooms.Count; i++)
+                    Console.WriteLine($"  {i + 1}. {rooms[i].Name}  (Id {rooms[i].Id})");
+                Console.Write("Pick: ");
+                if (int.TryParse(Console.ReadLine(), out var ri) && ri >= 1 && ri <= rooms.Count)
+                    item.ContainerId = rooms[ri - 1].Id;
+                else Console.WriteLine("  Invalid — left unowned.");
+                break;
+        }
     }
 
     // -------------------------------------------------------------------------

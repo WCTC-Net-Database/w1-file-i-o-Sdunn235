@@ -223,6 +223,29 @@ rows per bidirectional passage). Phase C.2 will refactor to bidirectional
 turning Door into the structural cousin of Chest under one shared
 lock/trap interface.
 
+#### Phase C.2.5 — `AddItem` placement picker for created items
+
+`GameEngine.AddItem` (Item Management menu → Add Item) used to save every
+newly created item with `ContainerId = NULL` — i.e., always "unowned." There
+was no in-menu way to place a freshly created item into a specific
+container; the only ways to populate a Chest, Monster loot pouch, or Room
+floor with a custom item were (a) the seed SQL scripts at migration time
+or (b) hand-editing the `Items.ContainerId` column. Test scenarios that
+need a specific item somewhere — encumbrance verification (heavy item in a
+chest, can the player refuse the loot?), lock/trap testing, future floor-
+pickup tests — all forced the table-edit workaround.
+
+| Old approach | New approach (Phase C.2.5) | Reason |
+|---|---|---|
+| `AddItem` saves with `ContainerId = NULL` unconditionally. Placement requires editing the `Items` table by hand. | After the item is constructed and before `SaveChanges`, a `PromptItemPlacement(item)` helper offers a numbered picker: 0. Unowned (default) / 1. Character inventory / 2. Chest / 3. Monster loot / 4. Room floor. Each sub-choice lists the existing containers of that subtype and sets `item.ContainerId` to the chosen container's PK. | Every Container TPH subtype is reachable from one in-game flow. The W12 promise that "items live in a single Items table with a single ContainerId FK" finally has matching CRUD UX — placing an item is the same op regardless of where it goes. |
+| To verify encumbrance refusal (`Character.CanCarry` → `LootInteractive`'s `[too heavy]` tag), Shawn had to seed a heavy item into a chest by SQL before running. | Create heavy item → place in Antechamber's chest in the same flow → walk Elara up → menu Chest → Loot → see the `[too heavy]` refusal. | Self-contained verification path for the C0029 encumbrance fix. Eliminates the SQL-edit step from the test loop. |
+| Room floor placement is reachable from the picker, but Phase C.2 left no in-game pickup UI for room floors (only `MovePlayer` and `DisplayCurrentRoom` exist under Room submenu). | The picker still allows Room-floor placement for seeding purposes; the floor-pickup wiring is deferred to Phase D alongside `ShowAllRooms` / `FindKeyLocation`. | The placement primitive is cheap once, useful immediately for the chest/loot flows, and a step closer to the Phase D floor-pickup work. No reason to gate it behind the missing pickup verb. |
+
+**Verification:**
+- App starts clean.
+- Menu Item Management → 2. Add Item → create a Weapon "Dark Matter" weight 200 → at the placement prompt pick `2. Chest` → pick Antechamber's chest → confirm `created (in container #N)` line and SQL `SELECT ContainerId FROM Items WHERE Name = 'Dark Matter'` returns the chest's PK.
+- Walk Elara to that chest → menu Chest → Loot → confirm Dark Matter shows `[too heavy]` in the picker and a numbered selection prints `Couldn't take Dark Matter — too heavy.` This pairs with C0029's encumbrance fix as the verification path.
+
 ---
 
 ## What's New This Week
