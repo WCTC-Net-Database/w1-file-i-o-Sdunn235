@@ -1427,13 +1427,13 @@ public class GameEngine
         if (!chest.IsLocked) { Console.WriteLine("\nNot locked."); return; }
         if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
 
-        var keys = player.Inventory.ItemsCollection.Where(i => i.IsKeyItem).ToList();
+        var keys = player.Inventory.ItemsCollection.Where(i => i.KeyId != null).ToList();
         if (!keys.Any()) { Console.WriteLine("\nNo keys or lockpicks in inventory."); return; }
 
         Console.WriteLine("\n--- Keys & Lockpicks ---");
         foreach (var k in keys)
         {
-            string label = k.KeyId is null ? "(lockpick)" : $"(key: {k.KeyId})";
+            string label = k.KeyId == Item.LockpickKeyId ? "(lockpick)" : $"(key: {k.KeyId})";
             Console.WriteLine($"  [{k.Id}] {k.Name} {label}");
         }
 
@@ -1446,7 +1446,7 @@ public class GameEngine
         _dbContext.SaveChanges();
         if (ok)
             Console.WriteLine($"\n{chest.Name} clicks open.");
-        else if (key.KeyId is null)
+        else if (key.KeyId == Item.LockpickKeyId)
             Console.WriteLine($"\nThe lockpick snaps. {chest.Name} stays shut.");
         else
             Console.WriteLine($"\nThat key doesn't fit {chest.Name}.");
@@ -1459,7 +1459,7 @@ public class GameEngine
         if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
 
         var lockpick = player.Inventory.ItemsCollection
-            .FirstOrDefault(i => i.IsKeyItem && i.KeyId is null);
+            .FirstOrDefault(i => i.KeyId == Item.LockpickKeyId);
         if (lockpick is null) { Console.WriteLine("\nNo lockpick available."); return; }
 
         bool ok = player.DisarmTrap(chest, lockpick);
@@ -1707,7 +1707,7 @@ public class GameEngine
         Console.WriteLine($"\n=== [{item.Id}] {item.Name} ({item.TypeNameForItem()}) ===");
         Console.WriteLine($"  Description: {item.Description}");
         Console.WriteLine($"  Value: {item.Value}g   Weight: {item.Weight} lbs");
-        Console.WriteLine($"  KeyItem: {item.IsKeyItem}   KeyId: {item.KeyId ?? "—"}");
+        Console.WriteLine($"  KeyId: {item.KeyId ?? "—"}");
         Console.WriteLine($"  EligibleSlot: {(item.EligibleSlot.HasValue ? item.EligibleSlot.ToString() : "—")}");
         switch (item)
         {

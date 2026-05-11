@@ -246,6 +246,86 @@ pickup tests — all forced the table-edit workaround.
 - Menu Item Management → 2. Add Item → create a Weapon "Dark Matter" weight 200 → at the placement prompt pick `2. Chest` → pick Antechamber's chest → confirm `created (in container #N)` line and SQL `SELECT ContainerId FROM Items WHERE Name = 'Dark Matter'` returns the chest's PK.
 - Walk Elara to that chest → menu Chest → Loot → confirm Dark Matter shows `[too heavy]` in the picker and a numbered selection prints `Couldn't take Dark Matter — too heavy.` This pairs with C0029's encumbrance fix as the verification path.
 
+#### Phase C.3-lite — Drop `Item.IsKeyItem`, sentinel lockpick KeyId
+
+The original Phase C.3 plan was a full **KeyItem TPH split** — a 5th `Item`
+subclass, a hand-edited data migration, and a column move of `KeyId` from
+`Item` to `KeyItem`. Reviewing the LucentForge bible
+(`docs/bible/lucentforge_simulation_foundation_v_1.md` §"intentionally
+deferred") and the W14 rubric clarified that neither required it:
+
+- **Bible:** explicitly defers "full itemization and crafting design" to later
+  layers. Nothing in the three bible docs (`simulation_foundation`,
+  `sim_core_schema`, `micro_simulation`) specifies a key/lock/lockpick
+  taxonomy. Creative freedom applies.
+- **W14 rubric:** Task 5 (`FindKeyLocation`) is graded on `.Include` to
+  eager-load the key's container — *not* on `OfType<KeyItem>()` discrimination.
+  The README's "Queries `_context.Items.OfType<KeyItem>()`" line is a
+  suggestion, not a rubric requirement.
+
+The Liskov payoff in W14 lives on the **lock** side (`ILockable` substituted
+between `Chest` and `Door`), not the key side. Splitting `KeyItem` into its
+own TPH subclass would add taxonomy overhead without adding LSP value.
+
+Instead, this commit removes the redundant `IsKeyItem` boolean and lets
+`KeyId` carry the full key-ness predicate. To make `KeyId != null` a clean
+"is-a-key" check, lockpick rows (which historically stored
+`IsKeyItem=1, KeyId=NULL`) are backfilled to `KeyId = 'lockpick'`, exposed
+in code as `Item.LockpickKeyId`.
+
+| Old approach (W11/W12/W13) | New approach (Phase C.3-lite) | Reason |
+|---|---|---|
+| 3 states encoded across 2 columns: `IsKeyItem=0` (not a key), `IsKeyItem=1, KeyId=NULL` (lockpick), `IsKeyItem=1, KeyId='foo'` (specific key). | 2 states on 1 column: `KeyId=NULL` (not a key), `KeyId='lockpick'` (lockpick — sentinel via `Item.LockpickKeyId` const), `KeyId='foo'` (specific key). | One source of truth. The boolean was redundant the moment lockpicks gained a non-null identifier. Removing it eliminates the "two predicates must stay in sync" failure mode (a row with `IsKeyItem=0 AND KeyId='cellar-key'` would silently never unlock anything — that's a bug class C.3-lite makes impossible). |
+| `Character.TryUnlock` had a four-way guard: `!key.IsKeyItem → reject`, `chest unlocked → trivially true`, `KeyId NULL → lockpick branch`, `KeyId set → specific-key branch`. | Same shape, simpler guards: `KeyId NULL → reject (not a key)`, `chest unlocked → trivially true`, `KeyId == LockpickKeyId → lockpick branch`, else → specific-key branch. | The specific-key branch's string compare (`key.KeyId == chest.RequiredKeyId`) naturally rejects `"lockpick"` against any specific `RequiredKeyId`, so no extra guard is needed when a lockpick is fed to a non-pickable lock. The algorithm shape stays intact; only the predicate definition tightens. |
+| `Character.DisarmTrap`: `if (!lockpick.IsKeyItem || lockpick.KeyId is not null) return false;` — read "must be a key AND must not be a specific key." | `if (lockpick.KeyId != Item.LockpickKeyId) return false;` — read "must be a lockpick." | The new line says exactly what it means. The old line said the same thing via De Morgan and a redundant bool. |
+| `GameEngine.ChestTryUnlock`: filter `i => i.IsKeyItem` to list keys; `k.KeyId is null ? "(lockpick)"` to label; `key.KeyId is null` to choose the failure message. | Filter `i => i.KeyId != null`; label `k.KeyId == Item.LockpickKeyId ? "(lockpick)"`; failure-message branch `key.KeyId == Item.LockpickKeyId`. | Display code follows the same single-column convention. The `Item.LockpickKeyId` constant is shared across all four callsites — magic-string smell quarantined to one declaration. |
+| EF scaffolded the migration as `DropColumn(IsKeyItem)` alone. Applying that would orphan every lockpick row (`KeyId NULL` after the bool drops = "not a key" by the new predicate). | Hand-edited migration: `UPDATE [Items] SET [KeyId] = N'lockpick' WHERE [IsKeyItem] = 1 AND [KeyId] IS NULL` runs **before** the `DropColumn`. Down restores `IsKeyItem=1` for any non-null KeyId and reverts lockpick KeyId to NULL. | Same hand-edit discipline as Phase B (`W14_ConvertConsumableEffectToEnum`) — scaffolds reason by type compatibility, not semantic intent. A bare `DropColumn` here would have been silently destructive. Reviewing every scaffolded migration is non-negotiable. |
+
+**Footnote on `Old Brass Key`:** The W12 seed (`W12_SeedInventoryData.sql:128`)
+inserted `Old Brass Key` with `IsKeyItem=1, KeyId=NULL` — i.e., as a lockpick,
+despite the flavor name. No chest's `RequiredKeyId` ever was `'brass-key'`
+either. The C.3-lite migration is faithful to that historical state: Brass
+Key now has `KeyId = 'lockpick'`. Functionally identical to its pre-migration
+behavior; the naming-vs-data mismatch is a W12 seed quirk, not a C.3-lite
+regression. Reassigning Brass Key to a real specific key would be a separate
+seed-data fix, not bundled here.
+
+**Verification (against fresh LocalDB w9_efcore_SDunn):**
+
+```sql
+SELECT Name, KeyId FROM Items WHERE KeyId IS NOT NULL ORDER BY KeyId, Name;
+```
+Expected rows (post-migration):
+- `Dungeon Key` → `dungeon-main` (specific, preserved)
+- `Iron Lockpick #1`, `Iron Lockpick #2`, `Old Brass Key` → `lockpick`
+
+```sql
+SELECT COUNT(*) FROM sys.columns
+ WHERE [object_id] = OBJECT_ID('dbo.Items') AND name = 'IsKeyItem';
+```
+Expected: `0` — column gone.
+
+**Runtime checks:**
+- Item Management → 3. View Item → on Iron Lockpick the detail line reads
+  `KeyId: lockpick` (no `KeyItem:` line).
+- Elara holds Iron Lockpick → walk to a pickable chest with NULL
+  `RequiredKeyId` → menu Chest → 3. TryUnlock → lockpick branch fires; on
+  success chest unlocks and lockpick is consumed; on failure
+  ("The lockpick snaps...") lockpick is still consumed.
+- Elara holds Dungeon Key (`KeyId='dungeon-main'`) → use against a chest
+  with matching `RequiredKeyId` → unlocks, key NOT consumed (specific-key
+  branch behavior, unchanged).
+- Elara uses Iron Lockpick on a trapped chest → menu Chest → 4. DisarmTrap →
+  trap disarms, lockpick consumed.
+
+**Composability tee-up for Phase C.4:** Phase C.4 is the *real* LSP payoff —
+`Character.TryUnlock(Chest, Item)` becomes `TryUnlock(ILockable, Item)`, and
+the same algorithm unlocks chests AND doors with zero duplication. C.3-lite
+makes that signature change land cleanly: the key parameter stays as the
+existing `Item` base class (no new subclass to teach `TryUnlock` about), and
+the predicate inside the method (`key.KeyId == target.RequiredKeyId` or
+lockpick) already reads `Item.KeyId` — no further data-shape change required.
+
 ---
 
 ## What's New This Week

@@ -249,10 +249,10 @@ public abstract class Character
     {
         if (chest is null) throw new ArgumentNullException(nameof(chest));
         if (key is null) throw new ArgumentNullException(nameof(key));
-        if (!key.IsKeyItem) return false;
+        if (key.KeyId is null) return false;          // not a key at all
         if (!chest.IsLocked) return true;
 
-        if (key.KeyId is null)
+        if (key.KeyId == Item.LockpickKeyId)
         {
             // Lockpick branch.
             if (!chest.IsPickable || chest.RequiredKeyId is not null)
@@ -290,7 +290,7 @@ public abstract class Character
     {
         if (chest is null) throw new ArgumentNullException(nameof(chest));
         if (lockpick is null) throw new ArgumentNullException(nameof(lockpick));
-        if (!lockpick.IsKeyItem || lockpick.KeyId is not null) return false;
+        if (lockpick.KeyId != Item.LockpickKeyId) return false;
         if (!chest.IsTrapped || chest.TrapDisarmed) return false;
 
         chest.TrapDisarmed = true;
