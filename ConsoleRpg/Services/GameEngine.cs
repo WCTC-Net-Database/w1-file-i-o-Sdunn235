@@ -909,8 +909,19 @@ public class GameEngine
 
         if (door.IsLocked)
         {
-            Console.WriteLine($"\nThe {door.Name} is locked!");
+            Console.WriteLine($"\nThe {door.Name} is locked! (Doors menu → 5 to attempt unlock.)");
             return;
+        }
+
+        // W14 Phase C.4 — fire door trap on first traverse, mirroring chest
+        // open behavior. Trap auto-disarms after the first hit ("trapped doors
+        // only hurt once" per the W14 README dungeon notes).
+        if (door.IsTrapped && !door.TrapDisarmed)
+        {
+            door.TrapDisarmed = true;
+            if (player.Resources is not null)
+                player.Resources.Hp = Math.Max(0, player.Resources.Hp - door.TrapDamage);
+            Console.WriteLine($"\nA trap on the {door.Name} fires! {player.Name} takes {door.TrapDamage} damage.");
         }
 
         var destination = door.GetOtherRoom(player.Room);
@@ -1784,6 +1795,7 @@ public class GameEngine
             Console.WriteLine("  5. Door management ▶");
             Console.WriteLine("  6. View current room (active player)");
             Console.WriteLine("  7. Move active player");
+            Console.WriteLine("  8. Inspect the room (find secret doors)");
             Console.WriteLine("  0. Back");
             Console.Write("Choice: ");
             switch (Console.ReadLine()?.Trim())
@@ -1795,6 +1807,7 @@ public class GameEngine
                 case "5": DoorsSubmenu(); break;
                 case "6": DisplayCurrentRoom(); break;
                 case "7": MovePlayer(); break;
+                case "8": InspectRoom(); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid."); break;
             }
@@ -1871,8 +1884,10 @@ public class GameEngine
             Console.WriteLine("\n=== Doors ===");
             Console.WriteLine("  1. List doors");
             Console.WriteLine("  2. Add door");
-            Console.WriteLine("  3. Toggle lock on door");
+            Console.WriteLine("  3. Toggle lock on door (admin)");
             Console.WriteLine("  4. Remove door");
+            Console.WriteLine("  5. Try to unlock door (active player)");
+            Console.WriteLine("  6. Disarm door trap (active player)");
             Console.WriteLine("  0. Back");
             Console.Write("Choice: ");
             switch (Console.ReadLine()?.Trim())
@@ -1881,9 +1896,117 @@ public class GameEngine
                 case "2": AddDoor(); break;
                 case "3": ToggleDoorLock(); break;
                 case "4": RemoveDoor(); break;
+                case "5": DoorTryUnlock(); break;
+                case "6": DoorDisarmTrap(); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid."); break;
             }
+        }
+    }
+
+    // W14 Phase C.4 — door unlock UX, parallel to ChestTryUnlock. The
+    // unlock logic itself is Character.TryUnlock(ILockable, Item) — door
+    // and chest share it, that's the LSP payoff.
+    private void DoorTryUnlock()
+    {
+        var player = ResolveActiveOrPrompt("unlock a door for");
+        if (player is null) return;
+        if (player.Room is null) { Console.WriteLine("\nNot in any room."); return; }
+        if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
+
+        var door = PromptForDoorInRoom(player);
+        if (door is null) return;
+        if (!door.IsLocked) { Console.WriteLine("\nNot locked."); return; }
+
+        var keys = player.Inventory.ItemsCollection.Where(i => i.KeyId != null).ToList();
+        if (!keys.Any()) { Console.WriteLine("\nNo keys or lockpicks in inventory."); return; }
+
+        Console.WriteLine("\n--- Keys & Lockpicks ---");
+        foreach (var k in keys)
+        {
+            string label = k.KeyId == Item.LockpickKeyId ? "(lockpick)" : $"(key: {k.KeyId})";
+            Console.WriteLine($"  [{k.Id}] {k.Name} {label}");
+        }
+
+        Console.Write("Item ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return; }
+        var key = keys.FirstOrDefault(k => k.Id == id);
+        if (key is null) { Console.WriteLine("Not in keys list."); return; }
+
+        bool ok = player.TryUnlock(door, key);
+        _dbContext.SaveChanges();
+        if (ok)
+            Console.WriteLine($"\n{door.Name} clicks open.");
+        else if (key.KeyId == Item.LockpickKeyId)
+            Console.WriteLine($"\nThe lockpick snaps. {door.Name} stays shut.");
+        else
+            Console.WriteLine($"\nThat key doesn't fit {door.Name}.");
+    }
+
+    // W14 Phase C.4 — door trap disarm UX, parallel to ChestDisarmTrap.
+    // Same Character.DisarmTrap(ILockable, Item) helper underneath.
+    private void DoorDisarmTrap()
+    {
+        var player = ResolveActiveOrPrompt("disarm a door trap for");
+        if (player is null) return;
+        if (player.Room is null) { Console.WriteLine("\nNot in any room."); return; }
+        if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
+
+        var door = PromptForDoorInRoom(player);
+        if (door is null) return;
+
+        var lockpick = player.Inventory.ItemsCollection
+            .FirstOrDefault(i => i.KeyId == Item.LockpickKeyId);
+        if (lockpick is null) { Console.WriteLine("\nNo lockpick available."); return; }
+
+        bool ok = player.DisarmTrap(door, lockpick);
+        _dbContext.SaveChanges();
+        Console.WriteLine(ok
+            ? $"\nTrap on {door.Name} disarmed. Lockpick used."
+            : $"\nCouldn't disarm — door isn't trapped, already disarmed, or item isn't a lockpick.");
+    }
+
+    private Door? PromptForDoorInRoom(Character player)
+    {
+        var doors = player.Room!.AllDoors.Where(d => d.IsVisible).ToList();
+        if (!doors.Any()) { Console.WriteLine("\nNo visible doors here."); return null; }
+        Console.WriteLine("\n--- Doors in this room ---");
+        foreach (var d in doors)
+        {
+            var flags = (d.IsLocked ? " [LOCKED]" : "")
+                      + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "");
+            var other = d.GetOtherRoom(player.Room);
+            Console.WriteLine($"  [{d.Id}] {d.Name} → {other.Name}{flags}");
+        }
+        Console.Write("Door ID: ");
+        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return null; }
+        var door = doors.FirstOrDefault(d => d.Id == id);
+        if (door is null) Console.WriteLine("Not in this room.");
+        return door;
+    }
+
+    // W14 Phase C.4 stretch — Inspect the room (deterministic). Wired
+    // from Rooms submenu → 8. Reveals any secret doors connected to the
+    // active player's current room.
+    private void InspectRoom()
+    {
+        var player = ResolveActiveOrPrompt("inspect the room with");
+        if (player is null) return;
+        if (player.Room is null) { Console.WriteLine("\nNot in any room."); return; }
+
+        var revealed = player.InspectForSecretDoors(_dbContext.Doors);
+        if (revealed.Count == 0)
+        {
+            Console.WriteLine($"\n{player.Name} searches {player.Room.Name} carefully but finds nothing hidden.");
+            return;
+        }
+
+        _dbContext.SaveChanges();
+        Console.WriteLine($"\n{player.Name} discovers {revealed.Count} hidden door(s) in {player.Room.Name}:");
+        foreach (var d in revealed)
+        {
+            var other = d.GetOtherRoom(player.Room);
+            Console.WriteLine($"  - {d.Name} → {other.Name}");
         }
     }
 

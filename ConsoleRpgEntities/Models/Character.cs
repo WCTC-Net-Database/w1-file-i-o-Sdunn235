@@ -245,17 +245,21 @@ public abstract class Character
         return OpenResult.Opened;
     }
 
-    public bool TryUnlock(Chest chest, Item key)
+    // W14 Phase C.4 — LSP refactor: target is ILockable, not Chest. Door
+    // implements the same interface (Phase C.2), so the identical algorithm
+    // unlocks chests AND doors AND any future ILockable with zero
+    // duplication. The method body uses only ILockable members.
+    public bool TryUnlock(ILockable target, Item key)
     {
-        if (chest is null) throw new ArgumentNullException(nameof(chest));
+        if (target is null) throw new ArgumentNullException(nameof(target));
         if (key is null) throw new ArgumentNullException(nameof(key));
         if (key.KeyId is null) return false;          // not a key at all
-        if (!chest.IsLocked) return true;
+        if (!target.IsLocked) return true;
 
         if (key.KeyId == Item.LockpickKeyId)
         {
             // Lockpick branch.
-            if (!chest.IsPickable || chest.RequiredKeyId is not null)
+            if (!target.IsPickable || target.RequiredKeyId is not null)
             {
                 Inventory?.RemoveItem(key);
                 return false;
@@ -268,34 +272,55 @@ public abstract class Character
             int total = roll + reflexes + proficiency;
 
             Inventory?.RemoveItem(key); // consumed regardless
-            if (total >= chest.UnlockDC)
+            if (total >= target.UnlockDC)
             {
-                chest.IsLocked = false;
+                target.IsLocked = false;
                 return true;
             }
             return false;
         }
 
         // Specific key branch.
-        if (chest.RequiredKeyId is null) return false;
-        if (string.Equals(key.KeyId, chest.RequiredKeyId, StringComparison.Ordinal))
+        if (target.RequiredKeyId is null) return false;
+        if (string.Equals(key.KeyId, target.RequiredKeyId, StringComparison.Ordinal))
         {
-            chest.IsLocked = false;
+            target.IsLocked = false;
             return true;
         }
         return false;
     }
 
-    public bool DisarmTrap(Chest chest, Item lockpick)
+    // W14 Phase C.4 — same LSP shift. Disarm works on any ILockable; the
+    // host (Chest, Door, …) is irrelevant to the algorithm.
+    public bool DisarmTrap(ILockable target, Item lockpick)
     {
-        if (chest is null) throw new ArgumentNullException(nameof(chest));
+        if (target is null) throw new ArgumentNullException(nameof(target));
         if (lockpick is null) throw new ArgumentNullException(nameof(lockpick));
         if (lockpick.KeyId != Item.LockpickKeyId) return false;
-        if (!chest.IsTrapped || chest.TrapDisarmed) return false;
+        if (!target.IsTrapped || target.TrapDisarmed) return false;
 
-        chest.TrapDisarmed = true;
+        target.TrapDisarmed = true;
         Inventory?.RemoveItem(lockpick);
         return true;
+    }
+
+    // W14 Phase C.4 / stretch — deterministic secret-door inspection.
+    // Looks at the supplied door collection, picks doors connected to this
+    // character's current room that are still IsSecret AND !IsDiscovered,
+    // marks them discovered, and returns the list of newly-revealed doors.
+    // Caller is responsible for SaveChanges() on the context.
+    public IReadOnlyList<Door> InspectForSecretDoors(IEnumerable<Door> doors)
+    {
+        if (doors is null) throw new ArgumentNullException(nameof(doors));
+        if (Room is null) return Array.Empty<Door>();
+
+        var discovered = doors
+            .Where(d => d.IsSecret && !d.IsDiscovered)
+            .Where(d => d.RoomAId == Room.Id || d.RoomBId == Room.Id)
+            .ToList();
+
+        foreach (var d in discovered) d.IsDiscovered = true;
+        return discovered;
     }
 
     /// <summary>

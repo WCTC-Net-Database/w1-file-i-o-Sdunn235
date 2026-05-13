@@ -326,6 +326,87 @@ existing `Item` base class (no new subclass to teach `TryUnlock` about), and
 the predicate inside the method (`key.KeyId == target.RequiredKeyId` or
 lockpick) already reads `Item.KeyId` — no further data-shape change required.
 
+#### Phase C.4 — TryUnlock LSP refactor + secret-door inspection
+
+The W14 rubric's 15-pt line — "Understands the `ILockable` Reuse" — lands
+here. `Character.TryUnlock(Chest, Item)` becomes `TryUnlock(ILockable, Item)`,
+and `Character.DisarmTrap(Chest, Item)` becomes `DisarmTrap(ILockable, Item)`.
+The method bodies already read only `ILockable` members (`IsLocked`,
+`IsPickable`, `RequiredKeyId`, `UnlockDC`, `IsTrapped`, `TrapDisarmed`,
+`TrapDamage`) — Phase C.2's Door work and Phase C.3-lite's KeyId cleanup
+prepared the way. The signature change is literally three identifiers:
+parameter type, parameter name (`chest` → `target`), and the dozen `chest.X`
+→ `target.X` renames inside.
+
+Once the method takes `ILockable`, calling it with a `Door` works because
+`Door : ILockable` (Phase C.2). The same algorithm — the same d20 +
+Reflexes + Lockpicking check, the same key-id string comparison, the same
+"lockpick consumed regardless" rule — unlocks chests AND doors with zero
+duplication. *This* is the LSP payoff the W14 README's "single tiny
+change" wording refers to.
+
+| Old approach (W13) | New approach (Phase C.4) | Reason |
+|---|---|---|
+| `Character.TryUnlock(Chest chest, Item key)` and `DisarmTrap(Chest chest, Item lockpick)`. Hardcoded to one host type. Doors had `ILockable` state but no way for `Character` to act on it. | Both methods take `ILockable target`. Identical algorithm; doors, chests, and any future `ILockable` (gates, lockboxes, portals) plug in without further `Character`-side changes. | The Liskov rubric line. Also: protects the algorithm from future host changes — if a 6th `ILockable` host appears, no churn in the unlock code. The substitution is real because all the lock semantics live on the interface, not the concrete classes. |
+| `MovePlayer` blocked on `door.IsLocked` with no recourse and ignored `door.IsTrapped` entirely (the rune-etched door's 12-damage trap never fired). | `MovePlayer` still blocks on locked (with a hint pointing at the new menu option), but on traversal of an unlocked trapped door, the trap fires once: `Hp -= TrapDamage`, `TrapDisarmed = true`, then the character passes through. Mirrors `OpenChest`'s trap-then-open semantics. | The README dungeon notes say "trapped doors only hurt once." That behavior was promised by the seed (rune-etched door has TrapDamage=12) but never wired. ~6 inline lines in `MovePlayer` close the gap without inventing a `Character.PassThroughDoor` instance method — one caller, no abstraction yet. |
+| No door-unlock UI verb at all. A locked door was a dead end; you had to admin-toggle it from the Doors submenu's "Toggle lock (admin)" option. | New `Doors → 5. Try to unlock door` and `Doors → 6. Disarm door trap` options, parallel to the chest submenu. `PromptForDoorInRoom` lists doors connected to the active player's current room with `[LOCKED] [TRAPPED]` flags; the unlock and disarm methods reuse the same key/lockpick picker code shape as their chest counterparts. | Door-unlock is now a player verb, not an admin override. The UX symmetry with chest unlock is intentional — same picker, same flow, same outcome messages with the door's name swapped in. (Stretch goal: collapse the chest and door wrappers into a single `TryUnlockTarget(ILockable)` helper. Deferred — symmetry is enough for the C.4 commit; the merger is a one-screen refactor when we want it.) |
+| `Character.InspectForSecretDoors` did not exist (the W14 README assumed it did). | New `Character.InspectForSecretDoors(IEnumerable<Door>)` instance method. Deterministic: filters the supplied door collection to ones connected to this character's current room that are still `IsSecret && !IsDiscovered`, marks them discovered, returns the list. Wired into `Rooms → 8. Inspect the room`. | The rubric's +10% stretch ("Wires `InspectForSecretDoors` into the game menu"). Deterministic per the design call — the README mentions chance-based as a *bonus inside* the stretch, not the headline behavior. Deterministic is testable, RNG-free, and lower-risk for landing the +10. A chance-based variant is one `Random.Shared.NextDouble()` away if we want it later. |
+| The seeded world (Antechamber + Vault, single unlocked Solid Oak Door between them, four chests with varied lock/trap state) gave **no door** in the entire game that could exercise the door-side of `TryUnlock`, `DisarmTrap`, `MovePlayer` trap-fire, or `InspectForSecretDoors`. Verifying the LSP refactor against doors required hand-editing the DB. | New `W14_SeedC4Demo` migration: adds 1 room (Hidden Alcove), adds 1 door (Hidden Tapestry — secret, Antechamber ↔ Hidden Alcove, untraversable until inspected), and modifies the existing Solid Oak Door in place to `IsLocked=1, IsPickable=1, UnlockDC=10, IsTrapped=1, TrapDamage=8`. One small migration, one demonstrable demo path per C.4 method. | Honesty in the verification path. The original C.4 README draft referenced an "Entrance Hall → Hidden Shrine" dungeon from the template — features we never seeded. A C.4 demo that can't replay from `git clone && dotnet ef database update` isn't a demo; it's a story. The migration is idempotent (name-keyed lookups) and reversible. |
+
+**Deferred from this phase (intentional scope choices):**
+
+- **`Character.PassThroughDoor` as an instance method.** The W14 README
+  assumes it exists; we don't build it. `MovePlayer` is the only caller for
+  door traversal in W14/W15 scope, and the C0020 "every verb on Character"
+  pattern doesn't pay off when there's no second consumer. If a monster
+  AI or teleport ability ever needs to move a character through a door,
+  the extraction is ~10 minutes. Until then, six inline lines beat a
+  premature abstraction.
+- **Trap composition (Trap as a separate entity).** Shawn flagged the
+  trap-on-`ILockable` shape as a real conflation: traps belong on tiles,
+  bodies, areas, items — anywhere, not just lockables. The proper move is
+  extracting `Trap` (with `TrapTrigger`/`TrapEffect` enums) into its own
+  table with FK relationships from each trap host. That's a real refactor
+  (migration, data move, UX rewiring) and deserves its own phase rather
+  than tagging along on the LSP refactor. README note here so the eventual
+  extraction has a back-reference.
+- **Merged `TryUnlockTarget(ILockable)` helper (+5% challenge).** Same
+  story — `ChestTryUnlock` and `DoorTryUnlock` are near-twins. Merging
+  them into one helper costs five lines but adds nothing the LSP refactor
+  didn't already prove. Deferred to Phase D's polish pass if there's time.
+
+**Verification:**
+
+```
+dotnet build  → 0 / 0
+dotnet ef database update  → W14_SeedC4Demo applies
+```
+
+Post-seed DB state:
+- Rooms: Antechamber, Vault, Hidden Alcove
+- Doors: Solid Oak Door (Antechamber ↔ Vault: locked, pickable, trapped 8 dmg, DC 10), Hidden Tapestry (Antechamber ↔ Hidden Alcove: secret, undiscovered)
+- Chests: unchanged from W13 (Weathered Wooden, Iron-Banded locked-pickable, Ornate Rune-Engraved key-required, Dusty Humming trapped)
+
+Runtime (active player = Elara, starts in Antechamber):
+
+1. **Locked-door block.** Rooms → 7. Move → pick Solid Oak Door → blocked with "(Doors menu → 5 to attempt unlock.)" hint, Elara stays put.
+2. **Door disarm.** Doors → 6. Disarm door trap → pick Solid Oak Door → "Trap on Solid Oak Door disarmed. Lockpick used." Now safe to traverse without taking damage on success.
+3. **Door unlock via lockpick.** Doors → 5. Try to unlock door → Solid Oak Door → pick a lockpick → either "Solid Oak Door clicks open." (d20 + Reflexes + Lockpicking ≥ 10) or "The lockpick snaps." (consumed on either path).
+4. **Door traversal post-unlock.** Rooms → 7. Move → Solid Oak Door → "Elara passes through the Solid Oak Door into Vault." Trap does NOT fire (disarmed in step 2). If you skip step 2, the trap fires on traversal: "A trap on the Solid Oak Door fires! Elara takes 8 damage." Trap auto-disarms after one fire.
+5. **Inspect secret door.** Return to Antechamber → Rooms → 8. Inspect the room → "Elara discovers 1 hidden door(s) in Antechamber: - Hidden Tapestry → Hidden Alcove." Subsequent `DisplayCurrentRoom` lists the Tapestry; before inspection, `AllDoors.Where(d => d.IsVisible)` filtered it out.
+6. **LSP regression check (chests).** Chests submenu → 3. Try to unlock → Iron-Banded Chest (locked, pickable) with a lockpick → same outcome shape as the door unlock above. Ornate Rune-Engraved Chest (requires `dungeon-main`) with the Dungeon Key looted off Grubnak → "Ornate Rune-Engraved Chest clicks open." Same `TryUnlock(ILockable, Item)` underneath — the LSP substitution is real.
+
+**Composability tee-up for Phase D:** The Doors submenu now has the full
+chest-parallel verb set (`open` is the move itself; `unlock`, `disarm` are
+their own menu entries). Phase D's graded LINQ tasks — `ShowAllRooms` and
+`FindKeyLocation` — operate on this same data model with no further
+schema or model changes. `FindKeyLocation` will use
+`_context.Items.Where(i => i.KeyId == requiredKeyId).Include(i => i.Container)`
+— the `.Include` is the graded artifact. `ShowAllRooms` will use
+`AllDoors.Where(d => d.IsVisible).Count()` for the exits column, which
+naturally hides undiscovered secret doors from the map until they're
+inspected.
+
 ---
 
 ## What's New This Week
