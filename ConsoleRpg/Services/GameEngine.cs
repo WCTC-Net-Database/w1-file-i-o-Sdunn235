@@ -1888,6 +1888,7 @@ public class GameEngine
             Console.WriteLine("  4. Remove door");
             Console.WriteLine("  5. Try to unlock door (active player)");
             Console.WriteLine("  6. Disarm door trap (active player)");
+            Console.WriteLine("  7. Edit door (admin: lock/trap/secret/key/DC)");
             Console.WriteLine("  0. Back");
             Console.Write("Choice: ");
             switch (Console.ReadLine()?.Trim())
@@ -1898,6 +1899,7 @@ public class GameEngine
                 case "4": RemoveDoor(); break;
                 case "5": DoorTryUnlock(); break;
                 case "6": DoorDisarmTrap(); break;
+                case "7": EditDoor(); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid."); break;
             }
@@ -2041,6 +2043,66 @@ public class GameEngine
         door.IsLocked = !door.IsLocked;
         _dbContext.SaveChanges();
         Console.WriteLine($"Door '{door.Name}' is now {(door.IsLocked ? "LOCKED" : "unlocked")}.");
+    }
+
+    // W14 Phase C.4 follow-up — admin edit of every gameplay-relevant
+    // Door field. Replaces the need for one-shot SeedC4Demo-style
+    // migrations whenever we want to add/test door state via menu UX.
+    // Each prompt accepts a blank line to keep the current value, so
+    // re-running on a partially-configured door doesn't clobber
+    // settings the user wants to preserve.
+    private void EditDoor()
+    {
+        var door = PromptDoor("edit");
+        if (door is null) return;
+
+        Console.WriteLine($"\nEditing '{door.Name}' (blank = keep current).");
+
+        Console.Write($"  Name [{door.Name}]: ");
+        var nm = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(nm)) door.Name = nm.Trim();
+
+        Console.Write($"  Description [{door.Description}]: ");
+        var ds = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(ds)) door.Description = ds.Trim();
+
+        door.IsLocked     = PromptBool("IsLocked",     door.IsLocked);
+        door.IsPickable   = PromptBool("IsPickable",   door.IsPickable);
+        door.IsTrapped    = PromptBool("IsTrapped",    door.IsTrapped);
+        door.TrapDisarmed = PromptBool("TrapDisarmed", door.TrapDisarmed);
+        door.IsSecret     = PromptBool("IsSecret",     door.IsSecret);
+        door.IsDiscovered = PromptBool("IsDiscovered", door.IsDiscovered);
+
+        door.TrapDamage = PromptInt("TrapDamage", door.TrapDamage);
+        door.UnlockDC   = PromptInt("UnlockDC",   door.UnlockDC);
+
+        Console.Write($"  RequiredKeyId [{door.RequiredKeyId ?? "—"}] (type 'clear' to null it, blank to keep): ");
+        var rk = Console.ReadLine();
+        if (!string.IsNullOrWhiteSpace(rk))
+            door.RequiredKeyId = string.Equals(rk.Trim(), "clear", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : rk.Trim();
+
+        _dbContext.SaveChanges();
+        Console.WriteLine($"\nDoor '{door.Name}' updated.");
+    }
+
+    private static bool PromptBool(string label, bool current)
+    {
+        Console.Write($"  {label} [{current}] (y/n, blank=keep): ");
+        var raw = Console.ReadLine()?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(raw)) return current;
+        if (raw is "y" or "yes" or "true" or "1") return true;
+        if (raw is "n" or "no" or "false" or "0") return false;
+        return current;
+    }
+
+    private static int PromptInt(string label, int current)
+    {
+        Console.Write($"  {label} [{current}] (blank=keep): ");
+        var raw = Console.ReadLine();
+        if (string.IsNullOrWhiteSpace(raw)) return current;
+        return int.TryParse(raw.Trim(), out var v) ? v : current;
     }
 
     private void RemoveDoor()

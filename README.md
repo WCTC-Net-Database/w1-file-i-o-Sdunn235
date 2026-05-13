@@ -407,6 +407,31 @@ schema or model changes. `FindKeyLocation` will use
 naturally hides undiscovered secret doors from the map until they're
 inspected.
 
+#### Phase C.4.1 — Edit Door menu (admin)
+
+The C.4 commit introduced `W14_SeedC4Demo` to plant locked / trapped /
+secret door state into the seed world because the menu UX had no way
+to author those fields after a door was created. `AddDoor` set name and
+endpoints; `ToggleDoorLock` flipped a single bool. Everything else
+(`IsTrapped`, `TrapDamage`, `IsSecret`, `IsDiscovered`, `RequiredKeyId`,
+`UnlockDC`, `TrapDisarmed`) required a SQL edit or a one-shot migration.
+
+That was acceptable for the immediate C.4 demo but bad as a long-term
+posture. Future graders, future demo seeds, future story content — all
+of it would otherwise either require new migrations to author door
+state OR direct table-row edits. This commit closes that gap.
+
+| Old approach | New approach (Phase C.4.1) | Reason |
+|---|---|---|
+| Door state was authorable only via `AddDoor` (name + endpoints, fresh row) + `ToggleDoorLock` (one bool) + raw SQL or a one-shot migration for everything else. | Doors → 7. Edit door: prompts for every gameplay-relevant field (`Name`, `Description`, `IsLocked`, `IsPickable`, `IsTrapped`, `TrapDisarmed`, `IsSecret`, `IsDiscovered`, `TrapDamage`, `UnlockDC`, `RequiredKeyId`) on any existing door. Blank line keeps current value; `'clear'` on the RequiredKeyId prompt nulls it. | Door state is now a normal menu CRUD operation, not a schema event. The `W14_SeedC4Demo` migration was the *last* one-shot we should need to author door demo content; from now on the same setup is one menu trip. Symmetrical with Item Management → 4. Edit Item, which already has blank-to-keep semantics for the same reason. |
+| Two-helper bool/int prompt boilerplate would have to live inside `EditDoor` if it weren't extracted. | New `PromptBool(label, current)` and `PromptInt(label, current)` static helpers handle blank-to-keep + parse-failure-to-keep uniformly. Currently used only by `EditDoor`; future `EditRoom`, `EditChest`, and `EditItem` polish passes are free to lean on them. | Cheap factoring. Three duplicated tri-state lines (current / parsed / fallback) collapsed to one helper each. The helpers are `private static` (no `this` state needed) which makes them safe to reuse from any GameEngine method. |
+
+**Verification:**
+- Build clean (0/0).
+- Doors → 7 → pick Hidden Tapestry (the secret door from `W14_SeedC4Demo`) → blank through every prompt → confirm no field changed. Idempotent edit, sanity check.
+- Doors → 7 → pick Solid Oak Door → `TrapDisarmed: y` → save → next `Move` through that door fires no trap. Equivalent to admin SQL `UPDATE Doors SET TrapDisarmed=1`, now in menu form.
+- Doors → 7 → pick any door → `RequiredKeyId: clear` → confirm the column goes to NULL (use `SELECT RequiredKeyId FROM Doors WHERE Name = '...'`). Distinguishes "blank=keep" from "explicit clear" without overloading the same input.
+
 ---
 
 ## What's New This Week
