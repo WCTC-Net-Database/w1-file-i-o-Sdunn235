@@ -3193,7 +3193,7 @@ public class GameEngine
 
             var shopItems = mira.Inventory.ItemsCollection.ToList();
             var shopChoices = shopItems
-                .Select(i => $"{i.Name} — {i.Description} [{i.Value}g]")
+                .Select(i => $"{Markup.Escape(i.Name)} — {Markup.Escape(i.Description)} [[{i.Value}g]]")
                 .Append("Leave shop")
                 .ToList();
 
