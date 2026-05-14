@@ -121,17 +121,27 @@ public class GameEngine
 
     public void SelectCharacter()
     {
-        Console.Write("Enter character name to select: ");
-        var name = Console.ReadLine() ?? string.Empty;
+        var all = _dbContext.Characters.ToList();
+        if (!all.Any()) { Console.WriteLine("\nNo characters in database."); return; }
 
-        var character = _dbContext.Characters
-            .FirstOrDefault(c => c.Name.Contains(name));
-
-        if (character is null)
+        Console.WriteLine("\n--- Characters ---");
+        for (int i = 0; i < all.Count; i++)
         {
-            Console.WriteLine("\nCharacter not found.");
-            return;
+            var c = all[i];
+            string room = c.Room?.Name ?? "no room";
+            Console.WriteLine($"  {i + 1,3}. [{c.Id,3}] {c.Name,-20} ({c.TypeName}, Lv {c.Level}) — {room}");
         }
+
+        Console.Write("Select # or type part of a name: ");
+        var input = Console.ReadLine()?.Trim() ?? string.Empty;
+
+        Character? character;
+        if (int.TryParse(input, out int idx) && idx >= 1 && idx <= all.Count)
+            character = all[idx - 1];
+        else
+            character = all.FirstOrDefault(c => c.Name.Contains(input, StringComparison.OrdinalIgnoreCase));
+
+        if (character is null) { Console.WriteLine("\nCharacter not found."); return; }
 
         _activeCharacter = character;
         Console.WriteLine($"\nActive character set: [{character.Id}] {character.Name} ({character.TypeName}, Level {character.Level})");

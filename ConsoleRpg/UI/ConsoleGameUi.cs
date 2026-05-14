@@ -30,17 +30,22 @@ public class ConsoleGameUi : IGameUi
             Console.WriteLine($"[Active: {activeLabel}]\n");
 
         Console.WriteLine("=== Main Menu ===");
-        Console.WriteLine(" 1. Characters     ▶");
-        Console.WriteLine(" 2. Items          ▶");
-        Console.WriteLine(" 3. Rooms & Doors  ▶");
-        Console.WriteLine(" 4. Skills         ▶");
-        Console.WriteLine(" 5. Abilities      ▶");
-        Console.WriteLine(" 6. Magic          ▶");
-        Console.WriteLine(" 7. Inventory      ▶");
-        Console.WriteLine(" 8. Chests & Loot  ▶");
-        Console.WriteLine(" 9. Bookshelves    ▶");
-        Console.WriteLine(" q. Queries        ▶");
-        Console.WriteLine(" 0. Exit");
+        Console.WriteLine();
+        Console.WriteLine(" -- Game --");
+        Console.WriteLine("  7. Inventory      ▶");
+        Console.WriteLine("  8. Chests & Loot  ▶");
+        Console.WriteLine("  9. Bookshelves    ▶");
+        Console.WriteLine();
+        Console.WriteLine(" -- Admin --");
+        Console.WriteLine("  1. Characters     ▶");
+        Console.WriteLine("  2. Items          ▶");
+        Console.WriteLine("  3. Rooms & Doors  ▶");
+        Console.WriteLine("  4. Skills         ▶");
+        Console.WriteLine("  5. Abilities      ▶");
+        Console.WriteLine("  6. Magic          ▶");
+        Console.WriteLine("  q. Queries        ▶");
+        Console.WriteLine();
+        Console.WriteLine("  0. Exit");
         Console.Write("\nEnter choice: ");
         return Console.ReadLine()?.Trim() ?? string.Empty;
     }

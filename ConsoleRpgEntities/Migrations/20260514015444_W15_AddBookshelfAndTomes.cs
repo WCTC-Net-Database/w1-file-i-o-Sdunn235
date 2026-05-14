@@ -108,7 +108,10 @@ Grubnak of the Sharp Eye was a scout of the Blackthorn Swarm.
 On the night of the third raid, he abandoned his post.
 Three clutchmates were taken because the flank was unwatched.
 
-He calls himself free. We call him a deserter.
+He calls himself free. We have heard he has taken another name for himself.
+Names do not change what a creature is.
+He will always be Grubnak to us.
+
 He stole from the Warchief''s table and fled into the dungeon dark.
 If found, he is to be returned. Alive is preferred. Not required.
 
