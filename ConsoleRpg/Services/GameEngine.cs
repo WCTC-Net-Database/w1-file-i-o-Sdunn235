@@ -1194,6 +1194,8 @@ public class GameEngine
             Console.WriteLine("  7. Use consumable");
             Console.WriteLine("  8. Strongest weapon (graded)");
             Console.WriteLine("  9. Total value + breakdown (graded)");
+            Console.WriteLine("  r. Read journal");
+            Console.WriteLine("  u. Unlock journal");
             Console.WriteLine("  0. Back to main menu");
             Console.Write("Choice: ");
             var choice = Console.ReadLine()?.Trim();
@@ -1209,6 +1211,8 @@ public class GameEngine
                 case "7": InventoryUseConsumable(player); break;
                 case "8": InventoryStrongestWeapon(player); break;
                 case "9": InventoryTotalValueBreakdown(player); break;
+                case "r": InventoryReadJournal(player); break;
+                case "u": InventoryUnlockJournal(player); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid choice."); break;
             }
@@ -1381,6 +1385,58 @@ public class GameEngine
         Console.WriteLine("  By type:");
         foreach (var b in breakdown)
             Console.WriteLine($"    {b.Type,-12} {b.Count,3} items   {b.Gold,6}g");
+    }
+
+    // ---- W15 Phase F1: Read journal from inventory ----
+    private void InventoryReadJournal(Character player)
+    {
+        var journals = Items(player).OfType<LockedJournal>().ToList();
+        Console.WriteLine("\n--- Journals in Inventory ---");
+        if (!journals.Any()) { Console.WriteLine("  (none)"); return; }
+
+        for (int i = 0; i < journals.Count; i++)
+        {
+            var j = journals[i];
+            var state = j.IsLocked ? "[LOCKED]" : "[unlocked]";
+            Console.WriteLine($"  {i + 1}. {j.Name} {state}");
+        }
+
+        Console.Write("Select journal #: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int idx) || idx < 1 || idx > journals.Count)
+        { Console.WriteLine("Invalid selection."); return; }
+
+        var journal = journals[idx - 1];
+        if (journal.IsLocked)
+        {
+            Console.WriteLine($"\n{journal.Name} is locked. Use 'u' to unlock it first.");
+            return;
+        }
+
+        Console.WriteLine($"\n=== {journal.Name} ===");
+        Console.WriteLine(journal.Content);
+        Console.WriteLine("===================");
+    }
+
+    // ---- W15 Phase F1: Unlock journal from inventory ----
+    private void InventoryUnlockJournal(Character player)
+    {
+        var journals = Items(player).OfType<LockedJournal>().ToList();
+        Console.WriteLine("\n--- Journals in Inventory ---");
+        if (!journals.Any()) { Console.WriteLine("  (none)"); return; }
+
+        for (int i = 0; i < journals.Count; i++)
+        {
+            var j = journals[i];
+            var state = j.IsLocked ? "[LOCKED]" : "[unlocked]";
+            Console.WriteLine($"  {i + 1}. {j.Name} {state}");
+        }
+
+        Console.Write("Select journal #: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int idx) || idx < 1 || idx > journals.Count)
+        { Console.WriteLine("Invalid selection."); return; }
+
+        var journal = journals[idx - 1];
+        TryUnlockTarget(player, journal, journal.Name);
     }
 
     // -------------------------------------------------------------------------

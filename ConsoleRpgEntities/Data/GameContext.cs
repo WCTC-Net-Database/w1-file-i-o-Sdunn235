@@ -97,12 +97,15 @@ public class GameContext : DbContext, IContext
             .HasValue<AnimalRace>("Animal");
 
         // --- Item TPH ---
+        // W15 Phase F1: LockedJournal added — an Item that also implements
+        // ILockable. Same TryUnlock algorithm works on it with zero changes.
         modelBuilder.Entity<Item>()
             .HasDiscriminator<string>("ItemType")
             .HasValue<Weapon>("Weapon")
             .HasValue<Armor>("Armor")
             .HasValue<Shield>("Shield")
-            .HasValue<Consumable>("Consumable");
+            .HasValue<Consumable>("Consumable")
+            .HasValue<LockedJournal>("LockedJournal");
 
         // --- Container TPH ---
         // W14 Phase C.1: Room joins Inventory/Equipment/Chest under the
