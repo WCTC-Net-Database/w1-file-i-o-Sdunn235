@@ -55,6 +55,7 @@ public class ConsoleGameUi : IGameUi
         Console.WriteLine("  5. Abilities      ▶");
         Console.WriteLine("  6. Magic          ▶");
         Console.WriteLine("  q. Queries        ▶");
+        Console.WriteLine("  r. Reset World    ⚠");
         Console.WriteLine();
         Console.WriteLine("  0. Exit");
         Console.Write("\nEnter choice: ");

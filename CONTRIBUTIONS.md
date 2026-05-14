@@ -31,35 +31,51 @@ The starting codebase brought everything built in W12–W14:
 
 ## 2. What I Added
 
-*[TODO: fill in after each phase ships — list every C0035+ commit here
-with one sentence per item. Placeholder structure below.]*
+### W15 Submission (C0035–C0042, graded 115/115)
 
-- **Phase E — MonsterLoot eliminated:** Removed `MonsterLoot` as a
-  separate Container subclass. NPCs now own their loot directly in their
-  existing `Inventory` (Character already has `Inventory` from Phase 1.5).
-  Migration `W15_KillMonsterLoot` moves items from MonsterLoot containers
-  to their owning NPC's Inventory and drops the `LootId` / `IsLooted`
-  columns.
-- **Gobby the Outcast Goblin:** Renamed Grubnak to Gobby in seed data.
-  Added narrative thread: Gobby is an outcast from his tribe, guarding
-  the dungeon key that unlocks two doors further in.
-- **LockedJournal — new ILockable item (F1):** `LockedJournal : Item,
-  ILockable`. Exercises `TryUnlock` with zero changes to the method —
-  the same algorithm that opens chests and doors also opens a locked
-  journal. Seeded in the Hidden Shrine. Reading the journal surfaces
-  Gobby's own account of why he was cast out.
-- **Bookshelf + Tome — new Container + Item (F2):** `Bookshelf :
-  Container` for information-holding containers. `Tome : Item` with
-  `Title` and `LoreText`. Seeded in Ancient Library with tomes
-  including the tribe's account of Gobby the Deserter — which
-  contradicts the journal.
-- **Wolf monster (F3):** `Wolf : Npc` (new Monster subtype) with
-  `PackSize` property (a lone wolf is a scout; danger is in numbers).
-  Seeded at Forest Edge. Proves Phase E works for a non-Gobby monster.
-- **LINQ queries (Phase G):** InventoryAudit (GroupBy container type),
-  MostDangerousRoom (GroupBy room, Sum health), LockedTreasures
-  (all ILockable entities the player can't open — now spans Chests,
-  Doors, AND LockedJournals via polymorphism).
+- **Phase E — MonsterLoot eliminated (C0036):** Removed `MonsterLoot` as a separate Container subclass.
+  NPCs now own their loot in their `Inventory`. Hand-edited migration moves items before dropping columns.
+- **Gobby the Outcast Goblin:** Renamed Grubnak to Gobby. Narrative thread: exiled from his tribe,
+  guarding the vault key alone.
+- **LockedJournal — ILockable on an Item (C0037):** `LockedJournal : Item, ILockable`. Proves
+  `TryUnlock` works on a third host type with zero changes to the method. The LSP payoff in action.
+- **Bookshelf + Tome (C0038):** `Bookshelf : Container` and `Tome : Item` with `LoreText`. Seeded
+  in Ancient Library. Books contradict Gobby's journal — two accounts, neither wins.
+- **Wolf NPC subtype (C0039):** `Wolf : Npc` with `PackSize` property. Seeded at Forest Edge.
+  Proves Phase E generalizes beyond Gobby.
+- **LINQ queries submenu (C0040):** InventoryAudit (GroupBy container type), MostDangerousRoom
+  (GroupBy room / Sum HP), LockedTreasures (ILockable entities player can't open — spans all 3 types).
+- **SelectCharacter + menu sections (C0041):** Numbered character list, Game/Admin menu grouping.
+
+### Post-Grade Polish (C0043–C0055)
+
+These commits extend the project toward a playable dungeon demo and LucentForge foundation.
+
+- **C0043 — Mode split + bug fix:** Play/Admin mode gate on startup. Bug fix: `ChestRichestLocked`
+  crash (`.ToList()` before accessing lazy-loaded `ItemsCollection`).
+- **C0044 — [Flags] enums:** `TrapType [Flags]` (teacher-suggested: Mechanical/Magical/Poison/Electric).
+  `SlotType` redesigned to power-of-2 values with `[Flags]`; `AnyHand = MainHand | OffHand`. Migration
+  converts old sequential ints to new power-of-2 values without data loss.
+- **C0045 — Player loop + dialogue:** Full room-first `PlayerLoop()`. Spectre Panel room display with
+  color HP bar. Numbered exits + lettered room objects with type dispatch. NPC dialogue: Mira (shop +
+  cellar quest + reward), Gobby (3 HP-gated branches), Erasmus (boss monologue). Combat expanded with
+  BitPool/BytePool split.
+- **C0046 — Grid coordinates + mini-map:** `Room.GridX`/`GridY`. ASCII mini-map in Spectre Panel.
+  All connections must be orthogonal for connector rendering.
+- **C0050 — Combat bug fixes:** Magic filter restricted to attack-kind spells; POW label corrected;
+  BitPool/BytePool draw from correct resource pool.
+- **C0051 — 7-room level redesign:** Complete world replacement migration. Inn as start, Cellar for
+  Mira's quest, Goblin Camp for key acquisition, Chapel Gate locked+trapped, Crypt, Vault boss.
+  Fixed Bookshelf FK column (`[Bookshelf_RoomId]`) and Door Description NOT NULL constraint.
+- **C0052 — Mira shop markup fix:** `Markup.Escape()` + `[[...]]` for item names/descriptions in
+  Spectre SelectionPrompt (bracket characters were parsed as color tags).
+- **C0053 — Playtest bug fixes:** Data Mend attacking fixed (attack-kind filter), Gobby HP reset
+  via migration, grid coordinates redesigned to orthogonal layout, Chapel Shelves showing all items
+  (not just `OfType<Tome>()`), lockpick-on-non-pickable door shows key hint.
+- **C0054 — PauseAndClear pattern:** All interaction handlers call `_gameUi.PauseAndClear()` before
+  returning so messages survive the next `PlayerLoop` `Console.Clear()`.
+- **C0055 — AdminResetWorld:** Admin menu option `r` restores full world state (enemy HP, inventories,
+  lock/trap states, Elara's starting gear) in one `SaveChanges()` call. Docs updated.
 
 ---
 

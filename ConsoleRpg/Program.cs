@@ -38,6 +38,7 @@ while (running)
                 case "8": Startup.GameEngine.ChestMenu(); break;
                 case "9": Startup.GameEngine.BookshelfMenu(); break;
                 case "q": Startup.GameEngine.QueriesMenu(); break;
+                case "r": Startup.GameEngine.AdminResetWorld(); break;
                 case "0":
                     adminRunning = false;
                     break;

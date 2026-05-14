@@ -28,11 +28,11 @@ Week 15 is **not** about rewriting architecture. The model layer from W14 is alr
 ## Learning Objectives
 
 By the end of this project you will have demonstrated:
-- [ ] Proficiency with EF Core, migrations, and LINQ across a non-trivial domain model
-- [ ] Ability to read and extend a service-layered application
-- [ ] Understanding of TPH inheritance for multiple entity hierarchies
-- [ ] Application of all five SOLID principles in a connected example
-- [ ] Creative world-building on top of a working framework
+- [x] Proficiency with EF Core, migrations, and LINQ across a non-trivial domain model
+- [x] Ability to read and extend a service-layered application
+- [x] Understanding of TPH inheritance for multiple entity hierarchies
+- [x] Application of all five SOLID principles in a connected example
+- [x] Creative world-building on top of a working framework
 
 ## Prerequisites
 
@@ -43,63 +43,55 @@ By the end of this project you will have demonstrated:
 
 ---
 
-## The World You Inherit
+## The World
 
-The seed data builds a complete starter world with:
+The seed data builds a 7-room dungeon with a clear narrative arc:
 
-- **10 rooms** forming a town, a maze, and a dungeon
-- **3 monsters** (Goblin, Wolf, Skeleton) placed in specific rooms
-- **3 doors** with different states (locked, trapped, secret)
-- **6 chests** placed throughout the world (some locked, one trapped, one openable in town)
-- **A starter kit** for the player (sword, armor, potions, lockpick)
+- **7 rooms** on an orthogonal grid (all door connections horizontal or vertical — required for mini-map rendering)
+- **5 enemy NPCs** placed in specific rooms
+- **2 story NPCs** (Mira the Innkeeper, Erasmus the Unbound boss)
+- **6 doors** with various states (locked, trapped, open, secret)
+- **4 chests** throughout the dungeon
+- **2 bookshelves** with readable books
+- **Elara** starts at the Inn with Iron Sword + Leather Vest equipped + 1 Healing Potion
 
 ### World Layout
 
 ```
-         [Ancient Library]      [Training Grounds]
-               |                         |
-          [archway]                 [open path]
-               |                         |
-         [Northern Gate] === Northern Gate (trapped) ===
-                       \                                 \
-                        [Town Square]   ← YOU START HERE
-                              |
-                         [open path]
-                              |
-                       [Forest Edge]  ← Gray Shadow (Wolf)
-                              |
-                         [overgrown]
-                              |
-                    [Twisting Wilds]  ← Grubnak (Goblin)
-                       /   |   \
-                  [Grove  ...  Thicket]  ← a maze of twisty little
-                   ↕ ↔          ↔ ↕         passages, all alike
-                              |
-                      [Ironbound Door LOCKED]
-                  (requires Grubnak's Dungeon Key)
-                              |
-                     [Trapped Vault]  ← Rattlebones (Skeleton)
-                              |              + dusty chest (trapped)
-                              |
-                     [Marble Panel SECRET]   ← Inspect Room to reveal
-                              |
-                     [Hidden Shrine]   ← ornate chest (same Dungeon Key)
+col0         col1              col2
+             ┌────────────┐
+             │ Inn Cellar │         row0 — Giant Cellar Rat; Cellar Cask
+             └─────┬──────┘
+                   │ Cellar Stairs
+             ┌─────┴──────────────┐
+             │  Wayward Crow Inn  │  row0 — Mira (shop + quest); YOU START HERE
+             └─────┬──────────────┘
+                   │ Thornwood Gate
+┌──────────┐ ┌─────┴──────┐ ┌────────────┐
+│  Goblin  ├─┤  Thornwood ├─┤   Ruined   │  row1 — Camp Crate; Chapel Gate (locked+trapped)
+│   Camp   │ │    Path    │ │   Chapel   │
+└──────────┘ └────────────┘ └─────┬──────┘
+                                  │ Crypt Passage
+                             ┌────┴──────┐
+                             │   Crypt   │  row2 — Risen Acolyte; Crypt Hound
+                             │ Entrance  │
+                             └─────┬─────┘
+                                   │ Vault Descent (requires vault_key)
+                             ┌─────┴─────┐
+                             │  Sealed   │  row3 — Erasmus the Unbound (boss); Sealed Reliquary
+                             │   Vault   │
+                             └───────────┘
 ```
-
-The dungeon has a deliberate **one key, two locks** progression: the Dungeon Key Grubnak drops opens both the Ironbound Door AND the Ornate Chest in the Hidden Shrine. The Marble Panel between the Trapped Vault and the Hidden Shrine is a **secret door** — the room beyond it is hidden from your map until you find it via Inspect Room.
 
 ### The Progression Loop
 
-A typical first playthrough looks something like:
-
-1. Start in **Town Square**, open the merchant lockbox sitting on a stool, take what's inside
-2. Move south through the **Forest Edge** — encounter the Wolf, fight, loot
-3. Enter the **Twisting Wilds** — navigate the maze (hint: one path loops!)
-4. Fight **Grubnak** to get the **Dungeon Key**
-5. Use the key on the **Ironbound Door** to reach the **Trapped Vault**
-6. Defeat **Rattlebones**, then carefully open the **dusty chest** (it's trapped — bring HP)
-7. **Inspect Room** to find the secret **Marble Panel**
-8. South into the **Hidden Shrine** — use the Dungeon Key on the **Ornate Chest** for the final reward
+1. Start at **The Wayward Crow Inn** — talk to Mira, check gear
+2. Clear **Inn Cellar** (Giant Cellar Rat) — return to Mira for reward dialogue
+3. Head to **Goblin Camp** via Thornwood Path — fight Gobby, loot the vault_key from his bag
+4. Take the path east to **Ruined Chapel** — disarm the trap, unlock the Chapel Gate
+5. Fight through **Crypt Entrance** (Risen Acolyte + Crypt Hound)
+6. Use the vault_key on **Vault Descent** — enter **The Sealed Vault**
+7. Survive Erasmus's monologue, defeat him, loot the Sealed Reliquary
 
 ---
 
@@ -416,6 +408,7 @@ the divergence than to introduce a class for its own sake.
 
 #### Phase H — UX Polish (C0041)
 
+
 **Decision:** `SelectCharacter()` now shows a numbered list and accepts `#` or
 partial name search. Main menu reorganized into Game / Admin sections.
 
@@ -423,6 +416,87 @@ partial name search. Main menu reorganized into Game / Admin sections.
 the presentation demo. The numbered list makes the app navigable without
 memorizing database content. Menu sections make it immediately clear which
 options are player-facing vs. admin/debug tools.
+
+---
+
+### Post-Grade Polish (C0043–C0055)
+
+These entries document work added after W15 was submitted and graded (115/115).
+They extend the submission toward the LucentForge runtime arc.
+
+---
+
+#### Play / Admin Mode Split (C0043)
+
+| Old | New | Reason |
+|-----|-----|--------|
+| Single menu mixing game and admin options | Startup gate: `p` (Play) / `a` (Admin) / `0` (Exit) | Cleaner demo flow; player mode is self-contained |
+| `GetMenuChoice()` was the only entry point | `GetModeChoice()` added to `IGameUi` and `ConsoleGameUi` | SRP: mode selection is distinct from menu selection |
+
+Bug fixed in this commit: `ChestRichestLocked()` crashed with "DataReader already open" because
+`c.ItemsCollection` was accessed while an outer query was still streaming. Fix: `.ToList()` before
+`.OrderByDescending(c => c.ItemsCollection.Sum(...))`.
+
+---
+
+#### [Flags] Enums (C0044)
+
+| Feature | Decision | Why |
+|---------|----------|-----|
+| `TrapType` (teacher-suggested) | New `[Flags]` enum: `None/Mechanical/Magical/Poison/Electric` | Chests and doors can have multiple simultaneous trap types; boolean `IsTrapped` can't encode that |
+| `SlotType` power-of-2 redesign | Added `[Flags]`, assigned `1<<n` values; `AnyHand = MainHand \| OffHand` | Items can declare multiple eligible slots; bitwise AND replaces equality check in `PickSlotFor` |
+| `ILockable.IsTrapped` | Replaced `bool IsTrapped { get; set; }` with `bool IsTrapped => TrapTypes != TrapType.None` (default interface impl) | Single source of truth; IsTrapped is always derived, never stale |
+| DB migration | Old sequential SlotType ints (0,1,2...) converted to power-of-2 via `CASE WHEN` SQL | No data loss; existing items automatically get correct new values |
+
+---
+
+#### Room-First Player Loop + Spectre Styling (C0045)
+
+**Decision:** Full `PlayerLoop()` replacing the flat admin-style menu. Key changes:
+- Room rendered as a Spectre `Panel` with color-coded HP bar (green/yellow/red threshold)
+- Numbered exits + lettered room objects (NPCs, chests, bookshelves, floor items)
+- Type dispatch via `_roomObjects: List<object>` field — letter index resolves to runtime type
+- `PauseAndClear()` at end of every interaction handler so messages survive the next `Console.Clear()`
+
+NPC dialogue system added: Mira (shop + cellar quest), Gobby (3 HP-gated branches), Erasmus (monologue).
+Combat expanded with BitPool/BytePool split — magic correctly draws from the right resource.
+
+---
+
+#### 7-Room Level Redesign (C0051)
+
+| Template world | Our world | Reason |
+|----------------|-----------|--------|
+| 5 abstract rooms (Forest Edge, Ancient Library, etc.) | 7 narrative rooms (Inn, Cellar, Camp, Path, Chapel, Crypt, Vault) | Story needs a progression arc with a clear beginning (Inn) and boss (Erasmus) |
+| No shop NPC | Mira the Innkeeper with interactive shop | LucentForge bible: NPCs are agents, not scenery |
+| Grubnak (placeholder name) | Gobby the Outcast Goblin (narrative backstory) | Goblins are scouts, not individual powerhouses; Gobby was exiled, which is why he guards the vault key alone |
+| No dialogue | Named dialogue dispatch: `switch(npc.Name)` | Characters should have different interaction models, not a generic "fight or examine" |
+
+Migration C0051 is one of the largest in the project — replaces all room/door/NPC/chest seed data.
+Key lessons: Bookshelf uses `[Bookshelf_RoomId]` column (EF TPH name), not `RoomId`; Door INSERT
+requires Description (NOT NULL constraint).
+
+---
+
+#### Grid Coordinates + Mini-Map (C0046 / C0053)
+
+**Decision:** `Room.GridX` / `Room.GridY` (nullable int) added. All 7 rooms assigned orthogonal
+coordinates. Mini-map renders from these coordinates using H/V connector logic.
+
+**Critical constraint:** All door connections must be strictly horizontal or vertical. Diagonal
+connections (e.g., Camp at (0,2) to Path at (1,1)) produce no connector line. Migration C0053
+redesigned the grid so Camp, Path, and Chapel all share row1 — eliminating the diagonal.
+
+---
+
+#### AdminResetWorld (C0055)
+
+**Decision:** Admin menu option `r` that restores the game world to its seeded starting state
+without touching migrations or the database schema.
+
+**Why:** During development, repeated playtesting changes world state (NPCs die, chests empty,
+Elara gets rich). Rather than rolling back migrations, a single reset operation restores all
+resources, inventories, lock/trap states, and Elara's starting gear in one `SaveChanges()` call.
 
 ---
 

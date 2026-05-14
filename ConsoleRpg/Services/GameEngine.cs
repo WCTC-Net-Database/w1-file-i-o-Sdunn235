@@ -3582,6 +3582,157 @@ public class GameEngine
         foreach (var (kind, name, note) in results)
             Console.WriteLine($"  [{kind,-8}] {name,-35} — needs {note}");
     }
+
+    // ── World Reset ───────────────────────────────────────────────────────────
+    // Resets all enemies, chests, traps, and Elara's inventory to the original
+    // seed state. Safe to run any number of times from the Admin menu.
+    public void AdminResetWorld()
+    {
+        Console.Write("\n  Reset the world to its starting state? All progress will be lost. (y/n): ");
+        if (Console.ReadLine()?.Trim().ToLower() != "y") { Console.WriteLine("  Cancelled."); return; }
+
+        // --- 1. Restore enemy NPC resources to full ---
+        var enemyNames = new[] { "Gobby", "Giant Cellar Rat", "Risen Acolyte", "Crypt Hound", "Erasmus the Unbound" };
+        var enemies = _dbContext.Characters.ToList().Where(c => enemyNames.Contains(c.Name)).ToList();
+        foreach (var e in enemies)
+        {
+            if (e.Resources is null) continue;
+            e.Resources.Hp       = e.DeriveMaxHp();
+            e.Resources.Sp       = e.DeriveMaxSp();
+            e.Resources.BitPool  = e.DeriveMaxBitPool();
+            e.Resources.BytePool = e.DeriveMaxBytePool();
+        }
+
+        // --- 2. Restore enemy loot inventories ---
+        void ClearAndRestock(string npcName, Action<Inventory> restock)
+        {
+            var npc = _dbContext.Characters.ToList().FirstOrDefault(c => c.Name == npcName);
+            if (npc?.Inventory is null) return;
+            foreach (var item in npc.Inventory.ItemsCollection.ToList())
+                _dbContext.RemoveEntity(item);
+            restock(npc.Inventory);
+        }
+
+        ClearAndRestock("Gobby", inv =>
+        {
+            inv.AddItem(new Weapon    { Name = "Goblin Cleaver", Description = "Crude, top-heavy, very enthusiastic.", Value = 35, Weight = 4, AttackPower = 8, WeaponType = WeaponType.Axe, Durability = 20 });
+            inv.AddItem(new Consumable { Name = "Lockpick",       Description = "A thin wire pick. Breaks on a bad roll.", Value = 5, Weight = 0, KeyId = Item.LockpickKeyId, Effect = ConsumableEffect.None });
+            inv.AddItem(new Consumable { Name = "Lockpick",       Description = "A thin wire pick. Breaks on a bad roll.", Value = 5, Weight = 0, KeyId = Item.LockpickKeyId, Effect = ConsumableEffect.None });
+            inv.AddItem(new Consumable { Name = "Healing Potion", Description = "A ruby flask that warms on the way down. Restores 25 HP.", Value = 30, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 25 });
+        });
+        ClearAndRestock("Giant Cellar Rat", inv =>
+            inv.AddItem(new Consumable { Name = "Stamina Draft", Description = "Bitter and fizzy. Restores 20 SP.", Value = 25, Weight = 1, Effect = ConsumableEffect.Stamina, Potency = 20 }));
+        ClearAndRestock("Risen Acolyte", inv =>
+            inv.AddItem(new Consumable { Name = "Healing Potion", Description = "A ruby flask that warms on the way down. Restores 25 HP.", Value = 30, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 25 }));
+        ClearAndRestock("Crypt Hound", inv =>
+            inv.AddItem(new Consumable { Name = "Wolf Pelt", Description = "Thick and surprisingly clean. Worth something to a tanner.", Value = 40, Weight = 3, Effect = ConsumableEffect.None }));
+        ClearAndRestock("Erasmus the Unbound", inv =>
+        {
+            inv.AddItem(new Consumable { Name = "Byte Crystal",       Description = "Dense with structured magic. Restores 30 BytePool.", Value = 90, Weight = 1, Effect = ConsumableEffect.BytePool, Potency = 30 });
+            inv.AddItem(new Consumable { Name = "Erasmus Manifesto",  Description = "Dense notes in a cramped hand. The last line: 'They think sealing me here ends the matter. Fools. I only need to wait.'", Value = 150, Weight = 1, Effect = ConsumableEffect.None });
+        });
+
+        // --- 3. Restore door states ---
+        var vaultGate = _dbContext.Doors.ToList().FirstOrDefault(d => d.Name == "Vault Gate");
+        if (vaultGate is not null) vaultGate.IsLocked = true;
+
+        var chapelGate = _dbContext.Doors.ToList().FirstOrDefault(d => d.Name == "Chapel Gate");
+        if (chapelGate is not null) chapelGate.TrapDisarmed = false;
+
+        // --- 4. Restore chest states and contents ---
+        var allChests = _dbContext.Containers.OfType<Chest>().ToList();
+
+        var campCrate = allChests.FirstOrDefault(c => c.Name == "Camp Crate");
+        if (campCrate is not null)
+        {
+            campCrate.IsLocked = true;
+            if (!campCrate.ItemsCollection.Any(i => i.KeyId == "vault_key"))
+                campCrate.AddItem(new Consumable { Name = "Vault Key", Description = "Heavy iron. Runes etched along the bow — old magic, half-faded.", Value = 200, Weight = 1, KeyId = "vault_key", Effect = ConsumableEffect.None });
+        }
+
+        var cellarCask = allChests.FirstOrDefault(c => c.Name == "Cellar Cask");
+        if (cellarCask is not null && !cellarCask.ItemsCollection.Any(i => i.Name == "Healing Potion"))
+            cellarCask.AddItem(new Consumable { Name = "Healing Potion", Description = "A ruby flask that warms on the way down. Restores 25 HP.", Value = 30, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 25 });
+
+        var altarChest = allChests.FirstOrDefault(c => c.Name == "Altar Chest");
+        if (altarChest is not null)
+        {
+            altarChest.TrapDisarmed = false;
+            if (!altarChest.ItemsCollection.Any(i => i.Name == "Bit Crystal"))
+                altarChest.AddItem(new Consumable { Name = "Bit Crystal", Description = "A faceted gem humming with raw Bit energy. Restores 30 BitPool.", Value = 60, Weight = 1, Effect = ConsumableEffect.BitPool, Potency = 30 });
+        }
+
+        var reliquary = allChests.FirstOrDefault(c => c.Name == "The Sealed Reliquary");
+        if (reliquary is not null)
+        {
+            reliquary.IsLocked     = true;
+            reliquary.TrapDisarmed = false;
+            if (!reliquary.ItemsCollection.Any(i => i.Name == "Runeblade"))
+                reliquary.AddItem(new Weapon    { Name = "Runeblade", Description = "Elven steel etched with dormant runes. Hums faintly in the hand.", Value = 500, Weight = 5, AttackPower = 18, WeaponType = WeaponType.Sword, Durability = 50 });
+            if (!reliquary.ItemsCollection.Any(i => i.Name == "Greater Healing Potion"))
+                reliquary.AddItem(new Consumable { Name = "Greater Healing Potion", Description = "Thick and golden — restores 60 HP.", Value = 80, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 60 });
+        }
+
+        // --- 5. Reset Elara's inventory and equipment to starting kit ---
+        var elara = _dbContext.Characters.OfType<Player>().ToList().FirstOrDefault(p => p.Name == "Elara the Bold");
+        if (elara is not null)
+        {
+            // Clear inventory
+            foreach (var item in elara.Inventory?.ItemsCollection.ToList() ?? new())
+                _dbContext.RemoveEntity(item);
+
+            // Unequip and clear equipment container
+            foreach (var slot in elara.EquipmentSlots) { slot.EquippedItemId = null; slot.EquippedItem = null; }
+            foreach (var item in elara.Equipment?.ItemsCollection.ToList() ?? new())
+                _dbContext.RemoveEntity(item);
+
+            // Starting gear: Iron Sword equipped to MainHand, Leather Vest equipped to Chest
+            var sword = new Weapon    { Name = "Iron Sword",   Description = "A reliable blade. Nothing fancy.", Value = 50, Weight = 3, AttackPower = 6, WeaponType = WeaponType.Sword, Durability = 30 };
+            var vest  = new Armor     { Name = "Leather Vest", Description = "Worn but protective. Better than nothing.", Value = 40, Weight = 5, DefenseRating = 3, WeightClass = ArmorWeight.Light, Slot = BodySlot.Chest };
+            var pot   = new Consumable { Name = "Healing Potion", Description = "A ruby flask that warms on the way down. Restores 25 HP.", Value = 30, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 25 };
+
+            if (elara.Equipment is not null)
+            {
+                elara.Equipment.AddItem(sword);
+                elara.Equipment.AddItem(vest);
+                var mainHand = elara.EquipmentSlots.FirstOrDefault(s => (s.Slot & SlotType.MainHand) != 0);
+                var chestSlot = elara.EquipmentSlots.FirstOrDefault(s => (s.Slot & SlotType.Chest) != 0);
+                if (mainHand  is not null) { mainHand.EquippedItem  = sword; }
+                if (chestSlot is not null) { chestSlot.EquippedItem = vest; }
+            }
+            if (elara.Inventory is not null) elara.Inventory.AddItem(pot);
+
+            // Move back to Inn
+            var inn = _dbContext.Containers.OfType<Room>().ToList().FirstOrDefault(r => r.Name == "The Wayward Crow Inn");
+            if (inn is not null) elara.RoomId = inn.Id;
+        }
+
+        // --- 6. Restore Mira's shop stock ---
+        var mira = _dbContext.Characters.ToList().FirstOrDefault(c => c.Name == "Mira");
+        if (mira?.Inventory is not null)
+        {
+            foreach (var item in mira.Inventory.ItemsCollection.ToList())
+                _dbContext.RemoveEntity(item);
+            mira.Inventory.AddItem(new Consumable { Name = "Healing Potion", Description = "A ruby flask that warms on the way down. Restores 25 HP.", Value = 30, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 25 });
+            mira.Inventory.AddItem(new Consumable { Name = "Healing Potion", Description = "A ruby flask that warms on the way down. Restores 25 HP.", Value = 30, Weight = 1, Effect = ConsumableEffect.Heal, Potency = 25 });
+            mira.Inventory.AddItem(new Consumable { Name = "Stamina Draft",  Description = "Bitter and fizzy. Restores 20 SP.", Value = 25, Weight = 1, Effect = ConsumableEffect.Stamina, Potency = 20 });
+            mira.Inventory.AddItem(new Consumable { Name = "Lockpick",       Description = "A thin wire pick. Breaks on a bad roll.", Value = 15, Weight = 0, KeyId = Item.LockpickKeyId, Effect = ConsumableEffect.None });
+        }
+
+        // --- 7. Also restore Thornwood floor herbs ---
+        var path = _dbContext.Containers.OfType<Room>().ToList().FirstOrDefault(r => r.Name == "Thornwood Path");
+        if (path is not null && !path.ItemsCollection.Any(i => i.Name == "Thornwood Herb"))
+        {
+            path.AddItem(new Consumable { Name = "Thornwood Herb", Description = "A bitter green leaf used in stamina tinctures. Chew for 10 SP.", Value = 5, Weight = 0, Effect = ConsumableEffect.Stamina, Potency = 10 });
+            path.AddItem(new Consumable { Name = "Thornwood Herb", Description = "A bitter green leaf used in stamina tinctures. Chew for 10 SP.", Value = 5, Weight = 0, Effect = ConsumableEffect.Stamina, Potency = 10 });
+        }
+
+        // --- Reset visited-room tracking ---
+        _visitedRooms.Clear();
+
+        _dbContext.SaveChanges();
+        Console.WriteLine("\n  World reset complete. Elara starts at the Inn with basic gear.");
+    }
 }
 
 // -- small local extension to get the un-proxied item TPH type name --
