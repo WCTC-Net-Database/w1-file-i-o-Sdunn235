@@ -197,20 +197,21 @@ public abstract class Character
 
         // Shield first — it's a subclass of Armor, so the Armor case below would
         // otherwise route it to BodySlot.Hands (wrong: shields use a hand slot).
+        // W15 Phase H: bitwise & instead of == because SlotType is now [Flags].
         if (item is Shield)
         {
             return Equipment.Slots.FirstOrDefault(s =>
-                       s.Slot == Enums.SlotType.OffHand && s.EquippedItemId is null)
+                       (s.Slot & Enums.SlotType.OffHand) != 0 && s.EquippedItemId is null)
                 ?? Equipment.Slots.FirstOrDefault(s =>
-                       s.Slot == Enums.SlotType.MainHand && s.EquippedItemId is null);
+                       (s.Slot & Enums.SlotType.MainHand) != 0 && s.EquippedItemId is null);
         }
 
         return item switch
         {
             Weapon => Equipment.Slots.FirstOrDefault(s =>
-                s.Slot == Enums.SlotType.MainHand && s.EquippedItemId is null),
+                (s.Slot & Enums.SlotType.MainHand) != 0 && s.EquippedItemId is null),
             Armor armor => Equipment.Slots.FirstOrDefault(s =>
-                BodySlotToSlotType(armor.Slot) == s.Slot && s.EquippedItemId is null),
+                (s.Slot & BodySlotToSlotType(armor.Slot)) != 0 && s.EquippedItemId is null),
             _ => null
         };
     }

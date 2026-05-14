@@ -68,12 +68,12 @@ public class GameEngine
             if (!itemsById.TryGetValue(itemId, out var item)) continue;
 
             // Shields are valid in either MainHand or OffHand.
-            // Everything else: EligibleSlot must equal the slot's SlotType.
+            // W15 Phase H: bitwise & because SlotType is now [Flags].
             bool valid;
             if (item is Shield)
-                valid = slot.Slot == SlotType.MainHand || slot.Slot == SlotType.OffHand;
+                valid = (slot.Slot & (SlotType.MainHand | SlotType.OffHand)) != 0;
             else
-                valid = item.EligibleSlot.HasValue && item.EligibleSlot.Value == slot.Slot;
+                valid = item.EligibleSlot.HasValue && (item.EligibleSlot.Value & slot.Slot) != 0;
 
             if (!valid)
             {
@@ -799,7 +799,7 @@ public class GameEngine
                 {
                     var other = d.GetOtherRoom(r);
                     var flags = (d.IsLocked ? " [LOCKED]" : "")
-                              + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "")
+                              + (d.IsTrapped && !d.TrapDisarmed ? $" [{d.TrapTypes} TRAP]" : "")
                               + (d.IsSecret ? (d.IsDiscovered ? " [secret-found]" : " [SECRET]") : "");
                     Console.WriteLine($"      → {d.Name} → {other.Name}{flags}");
                 }
@@ -944,7 +944,7 @@ public class GameEngine
                 var d = visibleDoors[i];
                 var other = d.GetOtherRoom(room);
                 var flags = (d.IsLocked ? " [LOCKED]" : "")
-                          + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "");
+                          + (d.IsTrapped && !d.TrapDisarmed ? $" [{d.TrapTypes} TRAP]" : "");
                 Console.WriteLine($"    [{i + 1}] {d.Name} → {other.Name}{flags}");
             }
         }
@@ -988,7 +988,7 @@ public class GameEngine
             door.TrapDisarmed = true;
             if (player.Resources is not null)
                 player.Resources.Hp = Math.Max(0, player.Resources.Hp - door.TrapDamage);
-            Console.WriteLine($"\nA trap on the {door.Name} fires! {player.Name} takes {door.TrapDamage} damage.");
+            Console.WriteLine($"\nA {door.TrapTypes} trap on the {door.Name} fires! {player.Name} takes {door.TrapDamage} damage.");
         }
 
         var destination = door.GetOtherRoom(player.Room);
@@ -2206,7 +2206,7 @@ public class GameEngine
         foreach (var d in doors)
         {
             var flags = (d.IsLocked ? " [LOCKED]" : "")
-                      + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "");
+                      + (d.IsTrapped && !d.TrapDisarmed ? $" [{d.TrapTypes} TRAP]" : "");
             var other = d.GetOtherRoom(player.Room);
             Console.WriteLine($"  [{d.Id}] {d.Name} → {other.Name}{flags}");
         }
@@ -2250,7 +2250,7 @@ public class GameEngine
         foreach (var d in doors)
         {
             var flags = (d.IsLocked ? " [LOCKED]" : "")
-                      + (d.IsTrapped && !d.TrapDisarmed ? " [TRAPPED]" : "")
+                      + (d.IsTrapped && !d.TrapDisarmed ? $" [{d.TrapTypes} TRAP]" : "")
                       + (d.IsSecret ? (d.IsDiscovered ? " [secret-found]" : " [SECRET]") : "");
             Console.WriteLine($"  [{d.Id}] {d.Name}: {d.RoomA.Name} ↔ {d.RoomB.Name}{flags}");
         }
@@ -2298,7 +2298,10 @@ public class GameEngine
 
         door.IsLocked     = PromptBool("IsLocked",     door.IsLocked);
         door.IsPickable   = PromptBool("IsPickable",   door.IsPickable);
-        door.IsTrapped    = PromptBool("IsTrapped",    door.IsTrapped);
+        if (PromptBool("IsTrapped (sets Mechanical)", door.IsTrapped))
+            door.TrapTypes = TrapType.Mechanical;
+        else
+            door.TrapTypes = TrapType.None;
         door.TrapDisarmed = PromptBool("TrapDisarmed", door.TrapDisarmed);
         door.IsSecret     = PromptBool("IsSecret",     door.IsSecret);
         door.IsDiscovered = PromptBool("IsDiscovered", door.IsDiscovered);

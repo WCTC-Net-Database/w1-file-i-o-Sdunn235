@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations.Schema;
 using ConsoleRpgEntities.Models.Containers;
+using ConsoleRpgEntities.Models.Enums;
 
 namespace ConsoleRpgEntities.Models;
 
@@ -44,9 +45,11 @@ public class Door : ILockable
     public int RoomBId { get; set; }
     public virtual Room RoomB { get; set; } = null!;
 
-    // --- ILockable contract (shared with Chest) ---
+    // --- ILockable contract (shared with Chest and LockedJournal) ---
+    // W15 Phase H: IsTrapped replaced by TrapTypes ([Flags] TrapType).
     public bool IsLocked { get; set; }
-    public bool IsTrapped { get; set; }
+    public TrapType TrapTypes { get; set; }
+    [NotMapped] public bool IsTrapped => TrapTypes != TrapType.None;
     public bool IsPickable { get; set; } = true;
     public string? RequiredKeyId { get; set; }
     public int TrapDamage { get; set; }
