@@ -260,11 +260,9 @@ public abstract class Character
         if (key.KeyId == Item.LockpickKeyId)
         {
             // Lockpick branch.
+            // Can't even try (needs a real key, or lock is unpickable) — tool not consumed.
             if (!target.IsPickable || target.RequiredKeyId is not null)
-            {
-                Inventory?.RemoveItem(key);
                 return false;
-            }
 
             int reflexes = Stats?.Reflexes ?? 0;
             int proficiency = CharacterSkills
@@ -272,12 +270,12 @@ public abstract class Character
             int roll = _rng.Next(1, 21); // d20
             int total = roll + reflexes + proficiency;
 
-            Inventory?.RemoveItem(key); // consumed regardless
             if (total >= target.UnlockDC)
             {
                 target.IsLocked = false;
-                return true;
+                return true; // Success — lockpick survives
             }
+            Inventory?.RemoveItem(key); // Failure — lockpick broke
             return false;
         }
 

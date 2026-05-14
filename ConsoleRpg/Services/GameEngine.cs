@@ -1207,6 +1207,7 @@ public class GameEngine
             Console.WriteLine("  8. Strongest weapon (graded)");
             Console.WriteLine("  9. Total value + breakdown (graded)");
             Console.WriteLine("  r. Read journal");
+            Console.WriteLine("  t. Read tome (from inventory)");
             Console.WriteLine("  u. Unlock journal");
             Console.WriteLine("  0. Back to main menu");
             Console.Write("Choice: ");
@@ -1224,6 +1225,7 @@ public class GameEngine
                 case "8": InventoryStrongestWeapon(player); break;
                 case "9": InventoryTotalValueBreakdown(player); break;
                 case "r": InventoryReadJournal(player); break;
+                case "t": InventoryReadTome(player); break;
                 case "u": InventoryUnlockJournal(player); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid choice."); break;
@@ -1426,6 +1428,24 @@ public class GameEngine
 
         Console.WriteLine($"\n=== {journal.Name} ===");
         Console.WriteLine(journal.Content);
+        Console.WriteLine("===================");
+    }
+
+    private void InventoryReadTome(Character player)
+    {
+        var tomes = Items(player).OfType<Tome>().ToList();
+        Console.WriteLine("\n--- Tomes in Inventory ---");
+        if (!tomes.Any()) { Console.WriteLine("  (none — take a book from a shelf first)"); return; }
+
+        for (int i = 0; i < tomes.Count; i++)
+            Console.WriteLine($"  {i + 1}. {tomes[i].Name}");
+
+        Console.Write("Read which # (0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int idx) || idx < 1 || idx > tomes.Count) return;
+
+        var tome = tomes[idx - 1];
+        Console.WriteLine($"\n=== {tome.Name} ===");
+        Console.WriteLine(tome.LoreText);
         Console.WriteLine("===================");
     }
 
@@ -1649,9 +1669,11 @@ public class GameEngine
 
         if (key.KeyId == Item.LockpickKeyId)
         {
-            Console.WriteLine($"\nThe lockpick snaps. {targetLabel} stays shut.");
-            // Lockpick failure: player chose the wrong tool, not the wrong key.
-            // Suppress the key-location hint — they weren't asking about the key.
+            // If the lockpick is gone from inventory it broke; if still there the lock just resisted.
+            bool broke = !(player.Inventory?.ItemsCollection.Contains(key) ?? false);
+            Console.WriteLine(broke
+                ? $"\nThe lockpick snaps. {targetLabel} stays shut."
+                : $"\nThis lock resists the pick. {targetLabel} stays shut.");
         }
         else
         {
@@ -2687,111 +2709,81 @@ public class GameEngine
     // Letters a,b,c... map to indices 0,1,2... Rebuilt every loop tick.
     private readonly List<object> _roomObjects = new();
 
+    // Rooms the player has set foot in this session (by container ID).
+    // Used by DrawMiniMap to distinguish visited (blue) from known (grey).
+    private readonly HashSet<int> _visitedRooms = new();
+
     private void DrawMiniMap(Character player)
     {
-        // Load all rooms that have been placed on the grid.
-        var rooms = _dbContext.Containers.OfType<Room>()
+        var allRooms = _dbContext.Containers.OfType<Room>()
             .Where(r => r.GridX != null && r.GridY != null)
             .ToList();
+        if (!allRooms.Any()) { Console.WriteLine("  (No rooms on grid.)"); return; }
 
-        if (!rooms.Any())
-        {
-            Console.WriteLine("\n  (No rooms have grid coordinates set.)");
-            return;
-        }
-
-        int minX = rooms.Min(r => r.GridX!.Value);
-        int maxX = rooms.Max(r => r.GridX!.Value);
-        int minY = rooms.Min(r => r.GridY!.Value);
-        int maxY = rooms.Max(r => r.GridY!.Value);
-
-        int cols = maxX - minX + 1;
-        int rows = maxY - minY + 1;
-
-        // Build a lookup: (col, row) → Room
-        var grid = rooms.ToDictionary(r => (r.GridX!.Value - minX, r.GridY!.Value - minY));
-
-        // Load all doors so we can draw connections.
         var doors = _dbContext.Doors.ToList();
 
-        // Helper: true if two grid-adjacent rooms share a door.
-        bool HasDoor(Room? a, Room? b)
+        // Known rooms = visited rooms PLUS rooms reachable via a visible door from any visited room.
+        var knownIds = new HashSet<int>(_visitedRooms);
+        foreach (var vid in _visitedRooms)
+            foreach (var d in doors.Where(d => (d.RoomAId == vid || d.RoomBId == vid) && d.IsVisible))
+            { knownIds.Add(d.RoomAId); knownIds.Add(d.RoomBId); }
+
+        int minX = allRooms.Min(r => r.GridX!.Value), maxX = allRooms.Max(r => r.GridX!.Value);
+        int minY = allRooms.Min(r => r.GridY!.Value), maxY = allRooms.Max(r => r.GridY!.Value);
+        int cols = maxX - minX + 1, rows = maxY - minY + 1;
+
+        var grid = allRooms.ToDictionary(r => (r.GridX!.Value - minX, r.GridY!.Value - minY));
+
+        bool HasVisibleDoor(Room? a, Room? b) => a is not null && b is not null &&
+            doors.Any(d => d.IsVisible &&
+                ((d.RoomAId == a.Id && d.RoomBId == b.Id) || (d.RoomAId == b.Id && d.RoomBId == a.Id)));
+
+        string Cell(Room? r)
         {
-            if (a is null || b is null) return false;
-            return doors.Any(d =>
-                (d.RoomAId == a.Id && d.RoomBId == b.Id) ||
-                (d.RoomAId == b.Id && d.RoomBId == a.Id));
+            if (r is null || !knownIds.Contains(r.Id)) return " ";
+            if (r.Id == player.RoomId) return "[bold red]■[/]";
+            if (_visitedRooms.Contains(r.Id))          return "[blue]■[/]";
+            return "[grey]□[/]";
         }
 
-        // Abbreviate room name to 5 chars.
-        static string Abbr(string name)
-        {
-            var words = name.Split(' ');
-            if (words.Length == 1) return name.Length <= 5 ? name : name[..5];
-            return string.Concat(words.Select(w => w.Length > 0 ? char.ToUpper(w[0]).ToString() : ""));
-        }
-
-        // Build map as a list of text lines.
-        var sb = new System.Text.StringBuilder();
-
+        var lines = new List<string>();
         for (int row = 0; row < rows; row++)
         {
-            // Top border of room row
-            var topLine    = new System.Text.StringBuilder();
-            var midLine    = new System.Text.StringBuilder();
-            var botLine    = new System.Text.StringBuilder();
-            var connLine   = new System.Text.StringBuilder(); // vertical connector row between grid rows
+            var rLine = new System.Text.StringBuilder();
+            var cLine = new System.Text.StringBuilder();
 
             for (int col = 0; col < cols; col++)
             {
-                grid.TryGetValue((col, row), out var room);
-                grid.TryGetValue((col, row + 1), out var roomBelow);
-                grid.TryGetValue((col + 1, row), out var roomRight);
+                grid.TryGetValue((col, row),     out var room);
+                grid.TryGetValue((col + 1, row), out var rRight);
+                grid.TryGetValue((col, row + 1), out var rBelow);
 
-                bool hConn = HasDoor(room, roomRight);
-                bool vConn = HasDoor(room, roomBelow);
+                rLine.Append(Cell(room));
 
-                if (room is not null)
-                {
-                    bool isCurrent = room.Id == player.RoomId;
-                    string abbr = isCurrent ? $"*{Abbr(room.Name)}*" : Abbr(room.Name);
-                    abbr = abbr.Length > 5 ? abbr[..5] : abbr.PadLeft((5 + abbr.Length) / 2).PadRight(5);
+                // Horizontal door connector
+                bool hVisible = room is not null && rRight is not null
+                    && knownIds.Contains(room.Id) && knownIds.Contains(rRight.Id);
+                rLine.Append(hVisible && HasVisibleDoor(room, rRight) ? "─" : " ");
 
-                    topLine.Append($"┌─{abbr[..Math.Min(3, abbr.Length)].PadRight(3)}─┐");
-                    midLine.Append($"│ {abbr.PadRight(5)} │");
-                    botLine.Append($"└─────┘");
-                    connLine.Append(vConn ? "   │   " : "       ");
-                }
-                else
-                {
-                    topLine.Append("       ");
-                    midLine.Append("       ");
-                    botLine.Append("       ");
-                    connLine.Append("       ");
-                }
-
-                // Horizontal connector (between this cell and right neighbor)
-                string hLink = (col < cols - 1 && hConn) ? "─" : " ";
-                topLine.Append(hLink);
-                midLine.Append(hLink);
-                botLine.Append(hLink);
-                connLine.Append(" ");
+                // Vertical door connector (for connector row)
+                bool vVisible = room is not null && rBelow is not null
+                    && knownIds.Contains(room.Id) && knownIds.Contains(rBelow.Id);
+                cLine.Append(vVisible && HasVisibleDoor(room, rBelow) ? "│" : " ");
+                cLine.Append(" ");
             }
 
-            sb.AppendLine(topLine.ToString());
-            sb.AppendLine(midLine.ToString());
-            sb.AppendLine(botLine.ToString());
+            lines.Add(rLine.ToString().TrimEnd());
             if (row < rows - 1)
-                sb.AppendLine(connLine.ToString());
+                lines.Add(cLine.ToString().TrimEnd());
         }
 
-        AnsiConsole.Write(new Panel(sb.ToString().TrimEnd())
+        AnsiConsole.Write(new Panel(string.Join("\n", lines))
         {
-            Header = new PanelHeader("[yellow bold] World Map [/]"),
+            Header = new PanelHeader("[yellow bold] Map [/]"),
             Border = BoxBorder.Rounded,
+            Padding = new Padding(2, 1),
         });
-
-        Console.WriteLine($"\n  * = your location ({player.Room?.Name ?? "?"})");
+        AnsiConsole.MarkupLine("  [bold red]■[/] here  [blue]■[/] visited  [grey]□[/] known  ─│ door");
     }
 
     public void PlayerLoop()
@@ -2806,6 +2798,7 @@ public class GameEngine
         bool playing = true;
         while (playing && (player.Resources?.Hp ?? 0) > 0)
         {
+            if (player.RoomId.HasValue) _visitedRooms.Add(player.RoomId.Value);
             Console.Clear();
             DrawRoomPanel(player);
             DrawRoomContents(player);
@@ -2978,11 +2971,10 @@ public class GameEngine
 
     private void PlayerFloorItemInteraction(Character player, Item item)
     {
-        Console.WriteLine($"\n  {item.Name} — {item.Description}");
-        Console.WriteLine($"  Value: {item.Value}g   Weight: {item.Weight} lb");
-        Console.Write("  (p)ick up / (c)ancel: ");
-        var c = Console.ReadLine()?.Trim().ToLower();
-        if (c == "p")
+        AnsiConsole.MarkupLine($"\n  [bold]{Markup.Escape(item.Name)}[/] — {Markup.Escape(item.Description)}");
+        AnsiConsole.MarkupLine($"  [grey]{item.Value}g · {item.Weight} lb[/]");
+        Console.Write("  Pick up? (y/n): ");
+        if (Console.ReadLine()?.Trim().ToLower() == "y")
         {
             if (player.TakeItemFrom(player.Room!, item))
             { Console.WriteLine($"  Picked up {item.Name}."); _dbContext.SaveChanges(); }
@@ -3034,14 +3026,26 @@ public class GameEngine
         for (int i = 0; i < tomes.Count; i++)
             Console.WriteLine($"    [{i + 1}] {tomes[i].Name}");
 
-        Console.Write("  Read which tome # (0 to cancel): ");
+        Console.Write("  Which # (0 to cancel): ");
         if (!int.TryParse(Console.ReadLine()?.Trim(), out int tomeIdx) || tomeIdx < 1 || tomeIdx > tomes.Count)
             return;
 
         var tome = tomes[tomeIdx - 1];
-        Console.WriteLine($"\n=== {tome.Name} ===");
-        Console.WriteLine(tome.LoreText);
-        Console.WriteLine("===========================");
+        Console.Write("  (r)ead in place / (t)ake to inventory / (c)ancel: ");
+        var act = Console.ReadLine()?.Trim().ToLower();
+        if (act == "r")
+        {
+            Console.WriteLine($"\n=== {tome.Name} ===");
+            Console.WriteLine(tome.LoreText);
+            Console.WriteLine("===========================");
+        }
+        else if (act == "t")
+        {
+            if (player.TakeItemFrom(shelf, tome))
+            { Console.WriteLine($"  Took {tome.Name}."); _dbContext.SaveChanges(); }
+            else
+                Console.WriteLine("  Can't carry that.");
+        }
     }
 
     private void PlayerNpcInteraction(Character player, Character npc)
