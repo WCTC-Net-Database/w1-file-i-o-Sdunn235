@@ -87,7 +87,8 @@ public class GameContext : DbContext, IContext
             .HasDiscriminator<string>("CharacterType")
             .HasValue<Player>("Player")
             .HasValue<Npc>("NPC")
-            .HasValue<Animal>("Animal");
+            .HasValue<Animal>("Animal")
+            .HasValue<Wolf>("Wolf");  // W15 Phase F3
 
         // --- Race TPH ---
         modelBuilder.Entity<Race>()
