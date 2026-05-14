@@ -7,6 +7,8 @@ using ConsoleRpgEntities.Models.Enums;
 using ConsoleRpgEntities.Models.Items;
 using ConsoleRpgEntities.Models.Races;
 using ConsoleRpgEntities.Models.Skills;
+using Microsoft.EntityFrameworkCore;
+using Spectre.Console;
 using MagicEntity = ConsoleRpgEntities.Models.Magic.Magic;
 
 namespace ConsoleRpg.Services;
@@ -793,6 +795,47 @@ public class GameEngine
         }
     }
 
+    // W14 Phase D Task 4 — graded LINQ. Player-facing dungeon map view,
+    // distinct from DisplayRooms (admin editor view above). Output is
+    // a Spectre.Console Table with columns: Room name, items-on-floor
+    // count, visible-exits count, "you are here" marker.
+    //
+    // LINQ contract per the W14 rubric:
+    //   * Sort by Name (OrderBy)
+    //   * For each room, count items where ContainerId == room.Id
+    //     (Room IS-A Container; floor items live in Items.ContainerId)
+    //   * For each room, count visible doors (Where(d => d.IsVisible))
+    //   * Mark active player's current room with an arrow
+    public void ShowAllRooms()
+    {
+        var player = ResolveActiveOrPrompt("see the map for");
+        if (player is null) return;
+
+        var rooms = _dbContext.Rooms.OrderBy(r => r.Name).ToList();
+        if (rooms.Count == 0) { Console.WriteLine("\nNo rooms exist."); return; }
+
+        var table = new Table()
+            .Border(TableBorder.Rounded)
+            .Title("[yellow bold]Dungeon Map[/]")
+            .AddColumn(new TableColumn("[bold]Room[/]"))
+            .AddColumn(new TableColumn("[bold]Items[/]").Centered())
+            .AddColumn(new TableColumn("[bold]Exits[/]").Centered())
+            .AddColumn(new TableColumn("[bold]You Are Here[/]").Centered());
+
+        foreach (var r in rooms)
+        {
+            int itemCount = r.ItemsCollection.Count;
+            int exitCount = r.AllDoors.Count(d => d.IsVisible);
+            bool youAreHere = r.Id == player.RoomId;
+
+            var nameCell = youAreHere ? $"[green bold]{r.Name}[/]" : r.Name;
+            var marker = youAreHere ? "[green]◀[/]" : "";
+            table.AddRow(nameCell, itemCount.ToString(), exitCount.ToString(), marker);
+        }
+
+        AnsiConsole.Write(table);
+    }
+
     public void AddRoom()
     {
         Console.Write("Room name: ");
@@ -856,7 +899,19 @@ public class GameEngine
         if (player.Room is null) { Console.WriteLine($"\n{player.Name} is not in any room."); return; }
 
         var room = player.Room;
-        Console.WriteLine($"\n=== {room.Name} ===");
+
+        // W14 Phase D — Spectre.Console Panel for the room header. The
+        // README W14 template introduces Spectre with this exact widget.
+        // HP is shown inside the panel body; the room name is the header.
+        var hp = player.Resources?.Hp ?? 0;
+        var maxHp = player.Resources?.MaxHp ?? 0;
+        var panel = new Panel($"[green]HP:[/] {hp}/{maxHp}    [grey]{player.Name}[/]")
+        {
+            Header = new PanelHeader($"[yellow bold]{room.Name}[/]"),
+            Border = BoxBorder.Rounded,
+            Padding = new Padding(1, 0, 1, 0)
+        };
+        AnsiConsole.Write(panel);
         Console.WriteLine($"  {room.Description}");
 
         var others = room.Characters.Where(c => c.Id != player.Id).ToList();
@@ -1435,11 +1490,30 @@ public class GameEngine
     {
         var chest = PromptForChest(player);
         if (chest is null) return;
-        if (!chest.IsLocked) { Console.WriteLine("\nNot locked."); return; }
+        TryUnlockTarget(player, chest, chest.Name);
+    }
+
+    // W14 Phase D / +5 challenge — single helper for all ILockable unlocks.
+    // Replaces the chest/door near-twin methods with one shared flow:
+    // confirm-locked → check inventory → key picker → TryUnlock → outcome
+    // → if failed with a specific RequiredKeyId, inline FindKeyLocation
+    // hint (Task 5 graded path).
+    //
+    // The LSP refactor in C.4 made TryUnlock(ILockable, Item) substitutable
+    // across hosts; this method makes the *UI* layer substitutable too. The
+    // chest and door wrappers shrink to "pick a target, hand it to this."
+    private void TryUnlockTarget(Character player, ILockable target, string targetLabel)
+    {
+        if (!target.IsLocked) { Console.WriteLine($"\n{targetLabel} is not locked."); return; }
         if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
 
         var keys = player.Inventory.ItemsCollection.Where(i => i.KeyId != null).ToList();
-        if (!keys.Any()) { Console.WriteLine("\nNo keys or lockpicks in inventory."); return; }
+        if (!keys.Any())
+        {
+            Console.WriteLine("\nNo keys or lockpicks in inventory.");
+            HintForKeyIfNeeded(target, targetLabel);
+            return;
+        }
 
         Console.WriteLine("\n--- Keys & Lockpicks ---");
         foreach (var k in keys)
@@ -1453,14 +1527,75 @@ public class GameEngine
         var key = keys.FirstOrDefault(k => k.Id == id);
         if (key is null) { Console.WriteLine("Not in keys list."); return; }
 
-        bool ok = player.TryUnlock(chest, key);
+        bool ok = player.TryUnlock(target, key);
         _dbContext.SaveChanges();
         if (ok)
-            Console.WriteLine($"\n{chest.Name} clicks open.");
-        else if (key.KeyId == Item.LockpickKeyId)
-            Console.WriteLine($"\nThe lockpick snaps. {chest.Name} stays shut.");
+        {
+            Console.WriteLine($"\n{targetLabel} clicks open.");
+            return;
+        }
+
+        if (key.KeyId == Item.LockpickKeyId)
+        {
+            Console.WriteLine($"\nThe lockpick snaps. {targetLabel} stays shut.");
+            // Lockpick failure: player chose the wrong tool, not the wrong key.
+            // Suppress the key-location hint — they weren't asking about the key.
+        }
         else
-            Console.WriteLine($"\nThat key doesn't fit {chest.Name}.");
+        {
+            Console.WriteLine($"\nThat key doesn't fit {targetLabel}.");
+            HintForKeyIfNeeded(target, targetLabel);
+        }
+    }
+
+    // W14 Phase D Task 5 — graded LINQ. Locates an item by its KeyId
+    // anywhere in the world (Items table) and reports the container that
+    // currently holds it. The .Include(i => i.Container) is the rubric-
+    // graded eager-load — pulls the Container row in the same query so
+    // we can report ContainerType + Name without a second round-trip.
+    //
+    // Per the project's lazy-loading-by-default preference, this is one
+    // of the few methods that explicitly opts into eager loading via
+    // IContext.QueryItems(). Justified by the rubric line: "Uses Include
+    // to eager-load the key's container and prints its location."
+    public void FindKeyLocation(string requiredKeyId)
+    {
+        if (string.IsNullOrWhiteSpace(requiredKeyId)) return;
+
+        var matches = _dbContext.QueryItems()
+            .Where(i => i.KeyId == requiredKeyId)
+            .Include(i => i.Container)
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            Console.WriteLine($"  Hint: no item with key id '{requiredKeyId}' exists anywhere in the world.");
+            return;
+        }
+
+        foreach (var m in matches)
+        {
+            if (m.Container is null)
+                Console.WriteLine($"  Hint: {m.Name} is currently unowned — nobody has it yet.");
+            else
+            {
+                string carrier = m.Container is Inventory inv && inv.Owner != null
+                    ? inv.Owner.Name
+                    : m.Container.Name;
+                Console.WriteLine($"  Hint: {m.Name} is held by {carrier}.");
+            }
+        }
+    }
+
+    // Fires FindKeyLocation only when it would actually help: the target
+    // requires a specific (non-lockpick) key. Lockpick-only locks and
+    // already-failed lockpick attempts don't get the hint — there's no
+    // single key to find.
+    private void HintForKeyIfNeeded(ILockable target, string targetLabel)
+    {
+        if (target.RequiredKeyId is null) return;
+        Console.WriteLine($"\n{targetLabel} requires a specific key.");
+        FindKeyLocation(target.RequiredKeyId);
     }
 
     private void ChestDisarmTrap(Character player)
@@ -1796,6 +1931,7 @@ public class GameEngine
             Console.WriteLine("  6. View current room (active player)");
             Console.WriteLine("  7. Move active player");
             Console.WriteLine("  8. Inspect the room (find secret doors)");
+            Console.WriteLine("  9. Dungeon map (active player)");
             Console.WriteLine("  0. Back");
             Console.Write("Choice: ");
             switch (Console.ReadLine()?.Trim())
@@ -1808,6 +1944,7 @@ public class GameEngine
                 case "6": DisplayCurrentRoom(); break;
                 case "7": MovePlayer(); break;
                 case "8": InspectRoom(); break;
+                case "9": ShowAllRooms(); break;
                 case "0": return;
                 default: Console.WriteLine("Invalid."); break;
             }
@@ -1906,43 +2043,19 @@ public class GameEngine
         }
     }
 
-    // W14 Phase C.4 — door unlock UX, parallel to ChestTryUnlock. The
-    // unlock logic itself is Character.TryUnlock(ILockable, Item) — door
-    // and chest share it, that's the LSP payoff.
+    // W14 Phase C.4 — door unlock UX. After Phase D's +5 challenge,
+    // this is now a thin wrapper: pick a target door, hand it to the
+    // shared TryUnlockTarget helper. Same algorithm, same outcome
+    // messages, same FindKeyLocation hint — proof that the LSP
+    // refactor reaches the UI layer too, not just Character.TryUnlock.
     private void DoorTryUnlock()
     {
         var player = ResolveActiveOrPrompt("unlock a door for");
         if (player is null) return;
         if (player.Room is null) { Console.WriteLine("\nNot in any room."); return; }
-        if (player.Inventory is null) { Console.WriteLine("\nNo inventory."); return; }
-
         var door = PromptForDoorInRoom(player);
         if (door is null) return;
-        if (!door.IsLocked) { Console.WriteLine("\nNot locked."); return; }
-
-        var keys = player.Inventory.ItemsCollection.Where(i => i.KeyId != null).ToList();
-        if (!keys.Any()) { Console.WriteLine("\nNo keys or lockpicks in inventory."); return; }
-
-        Console.WriteLine("\n--- Keys & Lockpicks ---");
-        foreach (var k in keys)
-        {
-            string label = k.KeyId == Item.LockpickKeyId ? "(lockpick)" : $"(key: {k.KeyId})";
-            Console.WriteLine($"  [{k.Id}] {k.Name} {label}");
-        }
-
-        Console.Write("Item ID: ");
-        if (!int.TryParse(Console.ReadLine(), out var id)) { Console.WriteLine("Invalid."); return; }
-        var key = keys.FirstOrDefault(k => k.Id == id);
-        if (key is null) { Console.WriteLine("Not in keys list."); return; }
-
-        bool ok = player.TryUnlock(door, key);
-        _dbContext.SaveChanges();
-        if (ok)
-            Console.WriteLine($"\n{door.Name} clicks open.");
-        else if (key.KeyId == Item.LockpickKeyId)
-            Console.WriteLine($"\nThe lockpick snaps. {door.Name} stays shut.");
-        else
-            Console.WriteLine($"\nThat key doesn't fit {door.Name}.");
+        TryUnlockTarget(player, door, door.Name);
     }
 
     // W14 Phase C.4 — door trap disarm UX, parallel to ChestDisarmTrap.

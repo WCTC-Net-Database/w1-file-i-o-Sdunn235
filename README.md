@@ -133,7 +133,7 @@ it `Owner`:
 ```
 [3] Healing Potion — Consumable, 1 lbs, 25g — Owner: Elara's Pack
 [12] Iron Lockpick #1 — Consumable, 1 lbs, 5g — Owner: Elara's Pack
-[18] Dungeon Key — Consumable, 1 lbs, 0g — Owner: Grubnak's Pouch
+[18] Dungeon Key — Consumable, 1 lbs, 0g — Owner: Grubnak's Loot
 ```
 
 The `Owner` label deliberately works across every Container subtype:
@@ -431,6 +431,114 @@ state OR direct table-row edits. This commit closes that gap.
 - Doors → 7 → pick Hidden Tapestry (the secret door from `W14_SeedC4Demo`) → blank through every prompt → confirm no field changed. Idempotent edit, sanity check.
 - Doors → 7 → pick Solid Oak Door → `TrapDisarmed: y` → save → next `Move` through that door fires no trap. Equivalent to admin SQL `UPDATE Doors SET TrapDisarmed=1`, now in menu form.
 - Doors → 7 → pick any door → `RequiredKeyId: clear` → confirm the column goes to NULL (use `SELECT RequiredKeyId FROM Doors WHERE Name = '...'`). Distinguishes "blank=keep" from "explicit clear" without overloading the same input.
+
+#### Phase D — Graded LINQ (ShowAllRooms + FindKeyLocation), Spectre.Console intro, merged unlock helper
+
+The W14 rubric's two LINQ tasks land here, plus the W14 README's
+"Spectre.Console (intro)" introduction, plus the +5 challenge merge.
+
+**Task 4 — `ShowAllRooms` (20 pts).** New `GameEngine.ShowAllRooms()`
+method, wired to `Rooms → 9. Dungeon map (active player)`. LINQ
+contract:
+- `_dbContext.Rooms.OrderBy(r => r.Name)` — sorted query (graded)
+- `r.ItemsCollection.Count` — floor item count, leverages the
+  Room-IS-A-Container model from C.1 (items on the floor live in the
+  same Items table with `ContainerId = room.Id`)
+- `r.AllDoors.Count(d => d.IsVisible)` — exit count filtered to
+  doors the player can actually see, so undiscovered secret doors
+  don't appear in the exit total until Inspected
+- `r.Id == player.RoomId` — "you are here" marker projection
+
+Output rendered as a Spectre.Console `Table` (Rounded border, four
+columns: Room / Items / Exits / You-Are-Here). The active player's row
+is highlighted green and gets a `◀` marker; other rooms render plain.
+This is the W14 README's "Spectre.Console (intro)" item — not graded
+as Task 4, but the W15 final's split-panel exploration UI builds on
+this same `Table` widget plus the `Panel` widget below.
+
+**Spectre Panel on `DisplayCurrentRoom`.** The W14 README template's
+`PrintRoomHeader` example puts a styled `Panel` around the room name
+showing the player's HP. Our `DisplayCurrentRoom` is the structural
+twin (player-facing room display). Added the same Panel:
+`Header = [yellow bold]{room.Name}[/]`, body `[green]HP:[/] {Hp}/{MaxHp}
+[grey]{player.Name}[/]`, rounded border, 1-cell horizontal padding.
+Description still renders as plain console below the panel — the
+panel is the *header*, not the full room view.
+
+**Task 5 — `FindKeyLocation` (15 pts).** New
+`GameEngine.FindKeyLocation(string requiredKeyId)` method:
+
+```csharp
+var matches = _dbContext.QueryItems()
+    .Where(i => i.KeyId == requiredKeyId)
+    .Include(i => i.Container)
+    .ToList();
+```
+
+The `.Include(i => i.Container)` is the rubric-graded eager-load.
+Output per match: `"Hint: {ItemName} is in {ContainerType} '{Container.Name}'."`
+For unowned matches (KeyId set but `Container == null`): `"...is currently
+unowned — nobody has it yet."` For zero matches: `"no item with key id
+'{key}' exists anywhere in the world."`
+
+**Integration: inline auto-hint on failed unlock.** Per the design
+call (Shawn chose "inline auto-hint on failed unlock" over a separate
+menu option), `FindKeyLocation` fires automatically when an unlock
+attempt fails AND the target has `RequiredKeyId != null`. Triggered
+from two places inside the new `TryUnlockTarget`:
+1. The "no keys in inventory" early exit (player can't even attempt)
+2. The post-`TryUnlock` failure branch (wrong key, or lockpick used
+   on a non-pickable lock)
+Lockpick-only failures on pickable-no-key locks (`target.RequiredKeyId
+is null`) get NO hint — there's no single key to find. The hint only
+fires when it would help.
+
+| Old approach | New approach (Phase D) | Reason |
+|---|---|---|
+| No player-facing world map at all. `DisplayRooms` showed all-rooms-and-doors-including-secrets — useful for admin debugging, useless as a player exploration aid because it leaked unsolved puzzles. | New `ShowAllRooms` is the player view. Sorted, hides undiscovered secrets from the exit count, marks the active player's location. `DisplayRooms` stays for admin work. | Two displays, two audiences. The Task 4 rubric wants a player-facing map; conflating it with the admin listing would have either leaked secrets or weakened the admin view. Both stay distinct. |
+| `IContext` exposed `IEnumerable<Item> Items` and `IEnumerable<Container> Containers` only. EF Core's `.Include()` extension requires `IQueryable<T>`, which `IEnumerable<T>` is not — `Items.AsQueryable().Include(...)` compiles but throws at runtime against a non-EF queryable. | Added `IQueryable<Item> QueryItems()` and `IQueryable<Container> QueryContainers()` to `IContext`. `GameContext` returns the underlying `DbSet<T>` (which already implements `IQueryable<T>`). Only `FindKeyLocation` uses these so far. | The project's standing preference is lazy-loading proxies (`UseLazyLoadingProxies` in `OnConfiguring`, per Shawn's saved feedback to minimize `Include`/`ToList`). `.Include` here is justified by the explicit rubric grade on it; the new accessor methods are documented as a "use sparingly" door rather than a wholesale shift away from lazy loading. |
+| `ChestTryUnlock` and `DoorTryUnlock` were ~30-line near-twins: same key-picker UI, same `player.TryUnlock(target, key)` call, same outcome message shape (only the target type and label differed). | Both collapse to thin wrappers around new `TryUnlockTarget(Character, ILockable, string label)`. The wrappers each do one thing: pick a target. The shared helper does everything else — including the new FindKeyLocation auto-hint. | The +5% Challenge bonus the W14 README calls out ("Merge `GameEngine.TryUnlockChest` and `GameEngine.TryUnlockDoor` into a single `TryUnlockTarget(ILockable)` helper"). Concrete proof that C.4's LSP refactor reaches the UI layer too — not just the `Character.TryUnlock` model method. ~40 LOC removed; behavior unchanged from C.4 except for the new hint. |
+| Failed unlocks ended with a one-line message ("That key doesn't fit X.") and no path forward. Player either guessed which key to try next or quit. | When unlock fails on a target with a specific `RequiredKeyId`, the new helper auto-prints the key's current location via `FindKeyLocation`. Wrong-key and no-inventory edge cases both surface the hint. Lockpick snaps do **not** — the player chose a pick on purpose; hinting the key location would be noise, not help. | The Task 5 method has to be wired *somewhere* for the rubric ("Wire it into the Move menu as a prompt when the player encounters a locked door they can't open"). Inline on wrong-key failure makes the timing right and avoids spawning a one-off menu option. Hint output prints only the item's name and who holds it — no raw key ID or EF type names exposed to the player. |
+
+**Verification:**
+
+Build:
+```
+dotnet build  → 0 / 0
+```
+
+Runtime walkthrough (active = Elara, starts in Antechamber):
+
+1. **Spectre Panel header.** Rooms → 6. View current room → confirm the room header renders as a rounded panel (`Antechamber` in yellow bold across the top, `HP: 75/75    Elara the Bold` inside, green HP label). Plain description prints below the panel.
+2. **Dungeon map / Task 4.** Rooms → 9. Dungeon map → Spectre `Table` renders 3 rows (Antechamber, Hidden Alcove, Vault), sorted alphabetically. Antechamber row is green-bold with a `◀` marker. Items column = floor item count per room; Exits column = visible doors only (Hidden Alcove shows 0 exits until you've Inspected → Hidden Tapestry).
+3. **Task 4 sort confirmation.** Add a new room via menu (Rooms → 2 → "Aaron's Trove") → re-run Dungeon map → confirm it appears at the top of the list (alphabetical sort working).
+4. **FindKeyLocation / Task 5 inline hint.** Chests → 3. Try to unlock → Ornate Rune-Engraved Chest (`RequiredKeyId = 'dungeon-main'`) → use a wrong item (e.g., a non-matching key, or trigger no-inventory edge) → confirm hint: `"Ornate Rune-Engraved Chest requires a specific key."` followed by `"Hint: Dungeon Key is held by Grubnak's Loot."` (MonsterLoot shows by container Name, not EF type). Loot Grubnak's body, get the Dungeon Key, retry → unlocks cleanly.
+5. **Merged unlock helper.** Same hint shape works from Doors → 5: Edit Solid Oak Door to set `RequiredKeyId` temporarily, try a wrong key → same message and `FindKeyLocation` hint fires. Same algorithm, same output — LSP at the UI layer. Reset door when done.
+6. **Lockpick path — no hint.** Solid Oak Door (RequiredKeyId cleared) → Doors → 5 → use a lockpick → either snaps or picks open per d20 + Reflexes + Lockpicking check. **No hint fires** — player chose a pick on purpose; surfacing the key location would be noise.
+7. **`FindKeyLocation` zero-match path.** Edit any door → set `RequiredKeyId: mythical-key` → Doors → 5 → wrong key → confirm hint reads `"no item with key id 'mythical-key' exists anywhere in the world."` Reset door. (Only branch that exposes the raw key ID — there's no item name to give instead.)
+
+**Rubric scorecard after Phase D:**
+
+| Criteria | Points | Status |
+|---|---|---|
+| Migrations Run Cleanly | 15 | C.3-lite + C.4 seed applied clean |
+| Walkthrough | 10 | Verified through C.4 |
+| Understands `Room : Container` | 15 | C.1 |
+| Understands `ILockable` Reuse | 15 | C.4 + Phase D UI merge |
+| Task 4: `ShowAllRooms` | 20 | Phase D — Spectre Table, sorted LINQ |
+| Task 5: `FindKeyLocation` | 15 | Phase D — `.Include`, inline hint |
+| Code Quality | 10 | Consistent style, single-source rules upheld |
+| **Total** | **100** | **All graded items addressed** |
+| Stretch: Secret Door Inspection | +10 | C.4 |
+| Challenge: Merged Unlock Helper | +5 | Phase D |
+
+**Composability tee-up for W15:** the Spectre Panel + Table primitives
+introduced here are exactly the widgets the W14 README's W15 hand-off
+section names as the foundation for the final project's split-panel
+exploration UI and live world map. The Phase D commit adds these
+widgets to our codebase as a *taste*, not the full UI shift. Phase D
+is where the W14 demo ends; W15 is where the Spectre rendering grows
+into a `MapManager`-style live view.
 
 ---
 

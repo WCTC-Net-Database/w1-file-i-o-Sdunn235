@@ -41,6 +41,12 @@ public class GameContext : DbContext, IContext
     IEnumerable<EquipmentSlot> IContext.EquipmentSlots => EquipmentSlots;
     IEnumerable<Skill> IContext.Skills => Skills;
 
+    // W14 Phase D — IQueryable accessors for graded LINQ exercises that
+    // call for .Include(). The DbSet<T> already implements IQueryable<T>,
+    // so the implementation is a direct return.
+    IQueryable<Item> IContext.QueryItems() => Items;
+    IQueryable<Container> IContext.QueryContainers() => Containers;
+
     public void AddEntity<T>(T entity) where T : class
     {
         Set<T>().Add(entity);
