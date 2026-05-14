@@ -2895,7 +2895,7 @@ public class GameEngine
             string status = dead
                 ? "[grey]defeated[/]"
                 : $"[red]HP {npc.Resources?.Hp}/{npc.Resources?.MaxHp}[/]";
-            AnsiConsole.MarkupLine($"    [{ltr}] {npc.Name} ({npc.TypeName}) — {status}");
+            AnsiConsole.MarkupLine($"    [[{ltr}]] {Markup.Escape(npc.Name)} ({Markup.Escape(npc.TypeName)}) — {status}");
             _roomObjects.Add(npc);
             anything = true;
         }
@@ -2903,21 +2903,21 @@ public class GameEngine
         {
             char ltr = (char)('a' + letterIdx++);
             string status = chest.IsLocked ? "[yellow]locked[/]" : "[green]unlocked[/]";
-            AnsiConsole.MarkupLine($"    [{ltr}] {chest.Name} — {status}");
+            AnsiConsole.MarkupLine($"    [[{ltr}]] {Markup.Escape(chest.Name)} — {status}");
             _roomObjects.Add(chest);
             anything = true;
         }
         foreach (var shelf in bookshelves)
         {
             char ltr = (char)('a' + letterIdx++);
-            AnsiConsole.MarkupLine($"    [{ltr}] [blue]{shelf.Name}[/] (bookshelf)");
+            AnsiConsole.MarkupLine($"    [[{ltr}]] [blue]{Markup.Escape(shelf.Name)}[/] (bookshelf)");
             _roomObjects.Add(shelf);
             anything = true;
         }
         foreach (var item in floorItems)
         {
             char ltr = (char)('a' + letterIdx++);
-            AnsiConsole.MarkupLine($"    [{ltr}] [italic]{item.Name}[/] (on floor)");
+            AnsiConsole.MarkupLine($"    [[{ltr}]] [italic]{Markup.Escape(item.Name)}[/] (on floor)");
             _roomObjects.Add(item);
             anything = true;
         }
