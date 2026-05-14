@@ -2826,7 +2826,6 @@ public class GameEngine
             if (input.Length == 1 && char.IsLetter(input[0]))
             {
                 HandleRoomObjectInteraction(player, input[0]);
-                _gameUi.PauseAndClear();
                 continue;
             }
 
@@ -2940,6 +2939,7 @@ public class GameEngine
             Console.Write("  (u)nlock with a key/lockpick? ");
             if (Console.ReadLine()?.Trim().ToLower() == "u")
                 TryUnlockTarget(player, door, door.Name);
+            _gameUi.PauseAndClear();
             return;
         }
 
@@ -2948,7 +2948,8 @@ public class GameEngine
             door.TrapDisarmed = true;
             if (player.Resources is not null)
                 player.Resources.Hp = Math.Max(0, player.Resources.Hp - door.TrapDamage);
-            Console.WriteLine($"\n  A {door.TrapTypes} trap fires! {player.Name} takes {door.TrapDamage} damage.");
+            AnsiConsole.MarkupLine($"\n  [red]A {door.TrapTypes} trap fires![/] {Markup.Escape(player.Name)} takes [red]{door.TrapDamage}[/] damage.");
+            _gameUi.PauseAndClear();
         }
 
         var destination = door.GetOtherRoom(player.Room!);
@@ -2984,6 +2985,7 @@ public class GameEngine
             else
                 Console.WriteLine("  Can't carry that (too heavy or no inventory).");
         }
+        _gameUi.PauseAndClear();
     }
 
     private void PlayerChestInteraction(Character player, Chest chest)
@@ -2996,18 +2998,21 @@ public class GameEngine
             Console.Write("  (u)nlock / (c)ancel: ");
             if (Console.ReadLine()?.Trim().ToLower() == "u")
                 TryUnlockTarget(player, chest, chest.Name);
+            _gameUi.PauseAndClear();
             return;
         }
 
         var result = player.OpenChest(chest);
         if (result == OpenResult.Trapped)
         {
-            Console.WriteLine($"\n  A {chest.TrapTypes} trap fires! {player.Name} takes {chest.TrapDamage} damage.");
+            AnsiConsole.MarkupLine($"\n  [red]A {chest.TrapTypes} trap fires![/] {Markup.Escape(player.Name)} takes [red]{chest.TrapDamage}[/] damage.");
             _dbContext.SaveChanges();
+            _gameUi.PauseAndClear();
         }
         else if (result == OpenResult.Locked)
         {
             Console.WriteLine("  Still locked.");
+            _gameUi.PauseAndClear();
             return;
         }
 
@@ -3052,6 +3057,7 @@ public class GameEngine
             else
                 Console.WriteLine("  Can't carry that.");
         }
+        _gameUi.PauseAndClear();
     }
 
     // Tracks whether Mira has already given the cellar-clear reward this session.
