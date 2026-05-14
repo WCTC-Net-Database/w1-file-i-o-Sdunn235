@@ -2662,6 +2662,119 @@ public class GameEngine
         Console.WriteLine("Invalid attribute.");
         return null;
     }
+
+    // -------------------------------------------------------------------------
+    // W15 Phase G — LINQ Queries submenu
+    // -------------------------------------------------------------------------
+
+    public void QueriesMenu()
+    {
+        while (true)
+        {
+            Console.WriteLine("\n=== Queries ===");
+            Console.WriteLine("  1. Inventory Audit    (items per container type)");
+            Console.WriteLine("  2. Most Dangerous Room (total enemy HP per room)");
+            Console.WriteLine("  3. Locked Treasures   (what you can't open yet)");
+            Console.WriteLine("  0. Back");
+            Console.Write("Choice: ");
+            var choice = Console.ReadLine()?.Trim();
+            switch (choice)
+            {
+                case "1": LinqInventoryAudit(); break;
+                case "2": LinqMostDangerousRoom(); break;
+                case "3": LinqLockedTreasures(); break;
+                case "0": return;
+                default: Console.WriteLine("Invalid choice."); break;
+            }
+        }
+    }
+
+    // ---- W15 LINQ Query 1: InventoryAudit — GroupBy container type ----
+    // Demonstrates Phase E payoff: monster loot now shows as "Inventory",
+    // not a separate MonsterLoot bucket. The schema unification is visible.
+    private void LinqInventoryAudit()
+    {
+        var allItems = _dbContext.QueryItems().ToList();
+
+        static string ContainerLabel(Container? c) => c switch
+        {
+            null        => "Unowned",
+            Inventory   => "Inventory",
+            Equipment   => "Equipment",
+            Chest       => "Chest",
+            Room        => "Room (Floor)",
+            Bookshelf   => "Bookshelf",
+            _           => c.GetType().BaseType?.Name ?? c.GetType().Name
+        };
+
+        var groups = allItems
+            .GroupBy(i => ContainerLabel(i.Container))
+            .Select(g => new { Type = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ToList();
+
+        Console.WriteLine("\n--- Inventory Audit: items per container type ---");
+        if (!groups.Any()) { Console.WriteLine("  (no items in database)"); return; }
+        foreach (var g in groups)
+            Console.WriteLine($"  {g.Type,-20} {g.Count,4} item(s)");
+        Console.WriteLine($"  {"Total",-20} {allItems.Count,4}");
+    }
+
+    // ---- W15 LINQ Query 2: MostDangerousRoom — GroupBy room, Sum HP ----
+    private void LinqMostDangerousRoom()
+    {
+        var results = _dbContext.Characters.ToList()
+            .Where(c => c.RoomId != null && c.Resources != null)
+            .GroupBy(c => c.Room?.Name ?? $"Room #{c.RoomId}")
+            .Select(g => new { Room = g.Key, TotalHp = g.Sum(c => c.Resources!.Hp), Count = g.Count() })
+            .OrderByDescending(x => x.TotalHp)
+            .ToList();
+
+        Console.WriteLine("\n--- Most Dangerous Rooms (total current HP of occupants) ---");
+        if (!results.Any()) { Console.WriteLine("  (no characters placed in rooms)"); return; }
+        foreach (var r in results)
+            Console.WriteLine($"  {r.Room,-25} {r.TotalHp,5} HP  ({r.Count} character(s))");
+    }
+
+    // ---- W15 LINQ Query 3: LockedTreasures — ILockable LSP payoff ----
+    // Spans Chests, Doors, AND LockedJournals. The same interface means
+    // the same filter logic works across all three types — LSP at the query layer.
+    private void LinqLockedTreasures()
+    {
+        var player = ResolveActiveOrPrompt("check locked treasures for");
+        if (player is null) return;
+
+        var playerKeyIds = (player.Inventory?.ItemsCollection ?? Enumerable.Empty<Item>())
+            .Where(i => i.KeyId != null)
+            .Select(i => i.KeyId!)
+            .ToHashSet(StringComparer.Ordinal);
+
+        bool CannotOpen(ILockable lockable)
+        {
+            if (!lockable.IsLocked) return false;
+            if (lockable.RequiredKeyId != null) return !playerKeyIds.Contains(lockable.RequiredKeyId);
+            return !lockable.IsPickable || !playerKeyIds.Contains(Item.LockpickKeyId);
+        }
+
+        var results = new List<(string Kind, string Name, string Note)>();
+
+        foreach (var chest in _dbContext.QueryContainers().OfType<Chest>().ToList())
+            if (CannotOpen(chest))
+                results.Add(("Chest", chest.Name, chest.RequiredKeyId != null ? $"key '{chest.RequiredKeyId}'" : "lockpick"));
+
+        foreach (var door in _dbContext.Doors.ToList())
+            if (CannotOpen(door))
+                results.Add(("Door", door.Name, door.RequiredKeyId != null ? $"key '{door.RequiredKeyId}'" : "lockpick"));
+
+        foreach (var journal in _dbContext.QueryItems().OfType<LockedJournal>().ToList())
+            if (CannotOpen(journal))
+                results.Add(("Journal", journal.Name, journal.RequiredKeyId != null ? $"key '{journal.RequiredKeyId}'" : "lockpick"));
+
+        Console.WriteLine($"\n--- Locked Treasures {player.Name} Cannot Open ({results.Count}) ---");
+        if (!results.Any()) { Console.WriteLine("  (you hold keys to everything — impressive)"); return; }
+        foreach (var (kind, name, note) in results)
+            Console.WriteLine($"  [{kind,-8}] {name,-35} — needs {note}");
+    }
 }
 
 // -- small local extension to get the un-proxied item TPH type name --

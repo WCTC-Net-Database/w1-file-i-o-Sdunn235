@@ -19,6 +19,7 @@ while (running)
         case "7": Startup.GameEngine.InventoryMenu(); break;
         case "8": Startup.GameEngine.ChestMenu(); break;
         case "9": Startup.GameEngine.BookshelfMenu(); break;
+        case "q": Startup.GameEngine.QueriesMenu(); break;
         case "0":
             running = false;
             Startup.GameUi.DisplayMessage("Goodbye, adventurer!");
