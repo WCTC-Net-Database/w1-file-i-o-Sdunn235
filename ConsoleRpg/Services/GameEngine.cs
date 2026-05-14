@@ -2683,10 +2683,344 @@ public class GameEngine
     // W15 Phase G — LINQ Queries submenu
     // -------------------------------------------------------------------------
 
+    // Ordered list of interactable objects rendered in DrawRoomContents.
+    // Letters a,b,c... map to indices 0,1,2... Rebuilt every loop tick.
+    private readonly List<object> _roomObjects = new();
+
     public void PlayerLoop()
     {
-        // Full implementation in C0045. Placeholder builds clean.
-        Console.WriteLine("\n[Player loop coming in next commit — returning to menu.]");
+        var player = _activeCharacter!;
+        if (player.Room is null)
+        {
+            Console.WriteLine("\nCharacter is not placed in any room. Returning to menu.");
+            return;
+        }
+
+        bool playing = true;
+        while (playing && (player.Resources?.Hp ?? 0) > 0)
+        {
+            Console.Clear();
+            DrawRoomPanel(player);
+            DrawRoomContents(player);
+
+            Console.Write("\n  Choice: ");
+            var input = Console.ReadLine()?.Trim().ToLower() ?? string.Empty;
+
+            if (input == "q") { playing = false; break; }
+            if (input == "i") { InventoryMenu(); continue; }
+            if (input == "x") { InspectRoomForSecrets(player); _gameUi.PauseAndClear(); continue; }
+
+            if (int.TryParse(input, out int exitIdx))
+            {
+                TakeExitByIndex(player, exitIdx);
+                continue;
+            }
+
+            if (input.Length == 1 && char.IsLetter(input[0]))
+            {
+                HandleRoomObjectInteraction(player, input[0]);
+                _gameUi.PauseAndClear();
+                continue;
+            }
+
+            Console.WriteLine("  Unknown command.");
+            _gameUi.PauseAndClear();
+        }
+
+        if ((player.Resources?.Hp ?? 0) <= 0)
+            Console.WriteLine($"\n  {player.Name} has fallen. Returning to menu.");
+    }
+
+    private void DrawRoomPanel(Character player)
+    {
+        var room = player.Room!;
+        int hp    = player.Resources?.Hp    ?? 0;
+        int maxHp = player.Resources?.MaxHp ?? 1;
+        string hpColor = hp > maxHp * 0.6 ? "green" : hp > maxHp * 0.25 ? "yellow" : "red";
+        var hpBar = $"[{hpColor}]HP {hp}/{maxHp}[/]";
+
+        var panel = new Panel($"{hpBar}   [grey]{player.Name} · Lv {player.Level} {player.TypeName}[/]")
+        {
+            Header = new PanelHeader($"[yellow bold]{room.Name}[/]"),
+            Border = BoxBorder.Rounded,
+        };
+        AnsiConsole.Write(panel);
+        AnsiConsole.MarkupLine($"  [italic grey]{room.Description}[/]\n");
+    }
+
+    private void DrawRoomContents(Character player)
+    {
+        var room = player.Room!;
+
+        var exits = room.AllDoors.Where(d => d.IsVisible).ToList();
+        var chests = _dbContext.Containers.OfType<Chest>()
+            .Where(c => c.RoomId == player.RoomId).ToList();
+        var bookshelves = _dbContext.Containers.OfType<Bookshelf>()
+            .Where(b => b.RoomId == player.RoomId).ToList();
+        var floorItems = room.ItemsCollection.ToList();
+        var npcs = room.Characters.Where(c => c.Id != player.Id).ToList();
+
+        // --- Exits ---
+        AnsiConsole.MarkupLine("  [bold]Exits:[/]");
+        if (exits.Count == 0)
+            Console.WriteLine("    (none)");
+        for (int i = 0; i < exits.Count; i++)
+        {
+            var d = exits[i];
+            var other = d.GetOtherRoom(room);
+            var flags = (d.IsLocked ? " [LOCKED]" : "")
+                      + (d.IsTrapped && !d.TrapDisarmed ? $" [{d.TrapTypes} TRAP]" : "");
+            Console.WriteLine($"    [{i + 1}] {d.Name} → {other.Name}{flags}");
+        }
+
+        // --- Objects (lettered a,b,c…) ---
+        _roomObjects.Clear();
+        int letterIdx = 0;
+        Console.WriteLine();
+        AnsiConsole.MarkupLine("  [bold]Here:[/]");
+        bool anything = false;
+
+        foreach (var npc in npcs)
+        {
+            char ltr = (char)('a' + letterIdx++);
+            bool dead = (npc.Resources?.Hp ?? 1) <= 0;
+            string status = dead
+                ? "[grey]defeated[/]"
+                : $"[red]HP {npc.Resources?.Hp}/{npc.Resources?.MaxHp}[/]";
+            AnsiConsole.MarkupLine($"    [{ltr}] {npc.Name} ({npc.TypeName}) — {status}");
+            _roomObjects.Add(npc);
+            anything = true;
+        }
+        foreach (var chest in chests)
+        {
+            char ltr = (char)('a' + letterIdx++);
+            string status = chest.IsLocked ? "[yellow]locked[/]" : "[green]unlocked[/]";
+            AnsiConsole.MarkupLine($"    [{ltr}] {chest.Name} — {status}");
+            _roomObjects.Add(chest);
+            anything = true;
+        }
+        foreach (var shelf in bookshelves)
+        {
+            char ltr = (char)('a' + letterIdx++);
+            AnsiConsole.MarkupLine($"    [{ltr}] [blue]{shelf.Name}[/] (bookshelf)");
+            _roomObjects.Add(shelf);
+            anything = true;
+        }
+        foreach (var item in floorItems)
+        {
+            char ltr = (char)('a' + letterIdx++);
+            AnsiConsole.MarkupLine($"    [{ltr}] [italic]{item.Name}[/] (on floor)");
+            _roomObjects.Add(item);
+            anything = true;
+        }
+
+        if (!anything)
+            Console.WriteLine("    (nothing here)");
+
+        Console.WriteLine("\n  [#] move  [letter] interact  [i] inventory  [x] inspect  [q] quit");
+    }
+
+    private void TakeExitByIndex(Character player, int exitIdx)
+    {
+        var exits = player.Room!.AllDoors.Where(d => d.IsVisible).ToList();
+        if (exitIdx < 1 || exitIdx > exits.Count)
+        {
+            Console.WriteLine("  No such exit.");
+            return;
+        }
+
+        var door = exits[exitIdx - 1];
+        if (door.IsLocked)
+        {
+            Console.WriteLine($"\n  The {door.Name} is locked.");
+            Console.Write("  (u)nlock with a key/lockpick? ");
+            if (Console.ReadLine()?.Trim().ToLower() == "u")
+                TryUnlockTarget(player, door, door.Name);
+            return;
+        }
+
+        if (door.IsTrapped && !door.TrapDisarmed)
+        {
+            door.TrapDisarmed = true;
+            if (player.Resources is not null)
+                player.Resources.Hp = Math.Max(0, player.Resources.Hp - door.TrapDamage);
+            Console.WriteLine($"\n  A {door.TrapTypes} trap fires! {player.Name} takes {door.TrapDamage} damage.");
+        }
+
+        var destination = door.GetOtherRoom(player.Room!);
+        player.RoomId = destination.Id;
+        _dbContext.SaveChanges();
+        Console.WriteLine($"\n  {player.Name} passes through {door.Name} into {destination.Name}.");
+    }
+
+    private void HandleRoomObjectInteraction(Character player, char letter)
+    {
+        int idx = letter - 'a';
+        if (idx < 0 || idx >= _roomObjects.Count) { Console.WriteLine("  Invalid."); return; }
+        var obj = _roomObjects[idx];
+        switch (obj)
+        {
+            case Character npc:    PlayerNpcInteraction(player, npc); break;
+            case Chest chest:      PlayerChestInteraction(player, chest); break;
+            case Bookshelf shelf:  PlayerBookshelfInteraction(player, shelf); break;
+            case Item item:        PlayerFloorItemInteraction(player, item); break;
+            default: Console.WriteLine("  Nothing to do."); break;
+        }
+    }
+
+    private void PlayerFloorItemInteraction(Character player, Item item)
+    {
+        Console.WriteLine($"\n  {item.Name} — {item.Description}");
+        Console.WriteLine($"  Value: {item.Value}g   Weight: {item.Weight} lb");
+        Console.Write("  (p)ick up / (c)ancel: ");
+        var c = Console.ReadLine()?.Trim().ToLower();
+        if (c == "p")
+        {
+            if (player.TakeItemFrom(player.Room!, item))
+            { Console.WriteLine($"  Picked up {item.Name}."); _dbContext.SaveChanges(); }
+            else
+                Console.WriteLine("  Can't carry that (too heavy or no inventory).");
+        }
+    }
+
+    private void PlayerChestInteraction(Character player, Chest chest)
+    {
+        string state = chest.IsLocked ? "locked" : "unlocked";
+        Console.WriteLine($"\n  {chest.Name} [{state}] — {chest.Description}");
+
+        if (chest.IsLocked)
+        {
+            Console.Write("  (u)nlock / (c)ancel: ");
+            if (Console.ReadLine()?.Trim().ToLower() == "u")
+                TryUnlockTarget(player, chest, chest.Name);
+            return;
+        }
+
+        var result = player.OpenChest(chest);
+        if (result == OpenResult.Trapped)
+        {
+            Console.WriteLine($"\n  A {chest.TrapTypes} trap fires! {player.Name} takes {chest.TrapDamage} damage.");
+            _dbContext.SaveChanges();
+        }
+        else if (result == OpenResult.Locked)
+        {
+            Console.WriteLine("  Still locked.");
+            return;
+        }
+
+        Console.Write("  (l)oot / (c)ancel: ");
+        if (Console.ReadLine()?.Trim().ToLower() == "l")
+            LootInteractive(player, chest, $"Inside {chest.Name}");
+        _dbContext.SaveChanges();
+    }
+
+    private void PlayerBookshelfInteraction(Character player, Bookshelf shelf)
+    {
+        var tomes = shelf.ItemsCollection.OfType<Tome>().ToList();
+        Console.WriteLine($"\n  {shelf.Name}");
+        if (!string.IsNullOrWhiteSpace(shelf.Description))
+            Console.WriteLine($"  {shelf.Description}");
+
+        if (!tomes.Any()) { Console.WriteLine("  (empty)"); return; }
+
+        for (int i = 0; i < tomes.Count; i++)
+            Console.WriteLine($"    [{i + 1}] {tomes[i].Name}");
+
+        Console.Write("  Read which tome # (0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int tomeIdx) || tomeIdx < 1 || tomeIdx > tomes.Count)
+            return;
+
+        var tome = tomes[tomeIdx - 1];
+        Console.WriteLine($"\n=== {tome.Name} ===");
+        Console.WriteLine(tome.LoreText);
+        Console.WriteLine("===========================");
+    }
+
+    private void PlayerNpcInteraction(Character player, Character npc)
+    {
+        bool dead = (npc.Resources?.Hp ?? 1) <= 0;
+        Console.WriteLine($"\n  {npc.Name} — {npc.TypeName}, Lv {npc.Level}");
+
+        if (dead)
+        {
+            Console.Write("  (l)oot body / (c)ancel: ");
+            var c = Console.ReadLine()?.Trim().ToLower();
+            if (c == "l" && npc.Inventory is not null)
+                LootInteractive(player, npc.Inventory, $"On {npc.Name}'s body");
+            return;
+        }
+
+        Console.WriteLine($"  HP: {npc.Resources?.Hp}/{npc.Resources?.MaxHp}  " +
+                          $"ATK: {npc.GetTotalAttack()}  DEF: {npc.GetTotalDefense()}");
+        Console.Write("  (f)ight / (e)xamine / (c)ancel: ");
+        var choice = Console.ReadLine()?.Trim().ToLower();
+        if (choice == "f") PlayerFightNpc(player, npc);
+        else if (choice == "e")
+            Console.WriteLine($"  {npc.Name} watches you carefully.");
+    }
+
+    private void PlayerFightNpc(Character player, Character npc)
+    {
+        var rng = new Random();
+        AnsiConsole.MarkupLine($"\n  [bold red]-- {player.Name} vs. {npc.Name}! --[/]\n");
+
+        int round = 1;
+        while ((player.Resources?.Hp ?? 0) > 0 && (npc.Resources?.Hp ?? 0) > 0)
+        {
+            // Player attacks
+            int pDmg = Math.Max(1, player.GetTotalAttack() + rng.Next(1, 7) - npc.GetTotalDefense());
+            if (npc.Resources is not null)
+                npc.Resources.Hp = Math.Max(0, npc.Resources.Hp - pDmg);
+            AnsiConsole.MarkupLine(
+                $"  Round {round}: You hit for [red]{pDmg}[/]. " +
+                $"{npc.Name} HP: [yellow]{npc.Resources?.Hp}[/]/{npc.Resources?.MaxHp}");
+
+            if ((npc.Resources?.Hp ?? 0) <= 0) break;
+
+            // NPC attacks
+            int nDmg = Math.Max(1, npc.GetTotalAttack() + rng.Next(1, 7) - player.GetTotalDefense());
+            if (player.Resources is not null)
+                player.Resources.Hp = Math.Max(0, player.Resources.Hp - nDmg);
+            AnsiConsole.MarkupLine(
+                $"  Round {round}: {npc.Name} hits for [red]{nDmg}[/]. " +
+                $"Your HP: [green]{player.Resources?.Hp}[/]/{player.Resources?.MaxHp}");
+
+            round++;
+        }
+
+        _dbContext.SaveChanges();
+
+        if ((npc.Resources?.Hp ?? 0) <= 0)
+        {
+            AnsiConsole.MarkupLine($"\n  [green]{npc.Name} defeated![/]");
+            if (npc.Inventory is not null)
+            {
+                Console.Write("  Loot body? (y/n): ");
+                if (Console.ReadLine()?.Trim().ToLower() == "y")
+                    LootInteractive(player, npc.Inventory, $"On {npc.Name}'s body");
+            }
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("\n  [red]You were defeated![/] Resting at 1 HP.");
+            if (player.Resources is not null) player.Resources.Hp = 1;
+            _dbContext.SaveChanges();
+        }
+    }
+
+    private void InspectRoomForSecrets(Character player)
+    {
+        if (player.Room is null) { Console.WriteLine("  Not in a room."); return; }
+
+        var allDoors = player.Room.AllDoors.ToList();
+        var found = player.InspectForSecretDoors(allDoors);
+        _dbContext.SaveChanges();
+
+        if (found.Count == 0)
+            Console.WriteLine("\n  You search the room... nothing hidden here.");
+        else
+            foreach (var d in found)
+                Console.WriteLine($"\n  You discover a hidden passage: {d.Name}!");
     }
 
     public void QueriesMenu()
