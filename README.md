@@ -335,7 +335,94 @@ in `CONTRIBUTIONS.md` so the grader can navigate directly to the equivalent code
 
 ### W15 Implementation Deviations
 
-*(Each W15 phase appends a row here before its commit.)*
+#### Phase E — MonsterLoot Eliminated (C0036)
+
+**Decision:** Deleted `MonsterLoot : Container`. NPC loot now lives in the
+NPC's `Inventory`, which already existed via the Phase 1.5 Character promotion.
+
+**Why:** The LucentForge bible (Simulation Foundation §2.3–2.4) treats enemies
+as agents, not loot containers. An NPC with `alive=false` still owns their
+possessions — they don't teleport into a separate bucket. A `MonsterLoot`
+container implies the world exists to serve the player; the Inventory model
+treats the NPC as a real entity whose belongings happen to become accessible
+after death. More honest, and one fewer Container subclass.
+
+**Template divergence:** Template keeps `MonsterLoot`. We dropped it with a
+hand-edited migration that atomically moves items before dropping columns.
+
+---
+
+#### Phase F1 — LockedJournal: ILockable on an Item (C0037)
+
+**Decision:** `LockedJournal : Item, ILockable` — a single class that is both
+a loot Item and a lockable object. `TryUnlock` is called with zero changes.
+
+**Why:** The W14 Phase C.4 LSP refactor made `TryUnlock(ILockable, Item)`
+substitutable — any ILockable works without touching the method. LockedJournal
+is the proof: same algorithm, third host type, zero code changes. Gobby's
+journal is seeded in Hidden Alcove, locked with the same `dungeon-main` key
+that opens the Ornate Chest — one key, three locks.
+
+---
+
+#### Phase F2 — Bookshelf + Tome (C0038)
+
+**Decision:** `Bookshelf : Container` (mirrors Chest: has RoomId FK to Room)
+and `Tome : Item` (has LoreText column). Ancient Library room added with Stone
+Archway door from Antechamber.
+
+**Why:** The bible's Bits/Bytes magic system needs a home in the schema.
+Readable lore objects are also a clean demonstration that Container and Item
+TPH are extensible at zero cost to existing code. The three seeded Tomes
+include a deliberate narrative contradiction with Gobby's journal — two
+accounts of the same event, neither acknowledging the other's framing.
+
+---
+
+#### Phase F3 — Wolf: NPC Subtype (C0039)
+
+**Decision:** `Wolf : Npc` with `PackSize` int property. Seeded at Forest Edge
+with Stats, Resources, Inventory, Equipment, and a Raw Wolf Pelt loot item.
+
+**Why:** Phase E needs a second test case. Only proving the Inventory loot path
+works for Gobby is not enough — the proof of generalization is a completely
+different monster type hitting the same code path. `PackSize` encodes the
+bible's swarm principle at the schema level: one wolf is a scout; the number
+tells you how many you can't see.
+
+---
+
+#### Phase G — LINQ Queries Submenu (C0040)
+
+**Decision:** Three graded LINQ queries in a `QueriesMenu()` method on
+`GameEngine` (not a new `AdminService` class). Wired to main menu option `q`.
+
+**Why:** The template calls for an `AdminService` class. Our `GameEngine`
+already has the full character/room/inventory context and all the helper
+methods these queries need. Splitting into `AdminService` would be a rename,
+not a refactor — thin wrapper calling GameEngine helpers. Better to document
+the divergence than to introduce a class for its own sake.
+
+**Queries:**
+- `InventoryAudit` — GroupBy container type. Post-Phase-E payoff: monster loot
+  shows as `Inventory`, not `MonsterLoot`. The schema unification is visible in
+  the output.
+- `MostDangerousRoom` — GroupBy room name, Sum current HP. Forest Edge is
+  non-trivial after Phase F3.
+- `LockedTreasures` — All ILockable entities the active player can't unlock.
+  Spans Chests + Doors + LockedJournals — LSP visible at the query layer.
+
+---
+
+#### Phase H — UX Polish (C0041)
+
+**Decision:** `SelectCharacter()` now shows a numbered list and accepts `#` or
+partial name search. Main menu reorganized into Game / Admin sections.
+
+**Why:** A verbatim-name prompt with no reference is a friction point during
+the presentation demo. The numbered list makes the app navigable without
+memorizing database content. Menu sections make it immediately clear which
+options are player-facing vs. admin/debug tools.
 
 ---
 

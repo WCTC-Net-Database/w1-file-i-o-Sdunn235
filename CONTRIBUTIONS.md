@@ -18,7 +18,7 @@ files (`MapManager.cs`, `ExplorationUI.cs`, `PlayerService.cs`,
 applied; all migrations in this repo are original W12–W15 work.
 
 The starting codebase brought everything built in W12–W14:
-- Container TPH (Inventory / Equipment / Chest / MonsterLoot / Room)
+- Container TPH (Inventory / Equipment / Chest / Room) — MonsterLoot was present at W14 tip and eliminated in W15 Phase E
 - Door bidirectional + ILockable (Phase C.2)
 - TryUnlock/DisarmTrap LSP refactor (Phase C.4)
 - KeyItem sentinel via `KeyId` column (Phase C.3-lite)
@@ -88,21 +88,31 @@ with one sentence per item. Placeholder structure below.]*
 
 ## 4. Reflection on This Project
 
-*[TODO: fill in after W15 work is complete — hardest part, what's next.
-Suggested talking points:]*
+This project was built collaboratively with AI — Claude specifically —
+and that was intentional. The course framed W15 as a capstone where the
+expectation is that you understand what you built, not that you typed
+every character yourself. I understand the architecture: what each class
+is for, why the Container hierarchy is shaped the way it is, why
+MonsterLoot was wrong, and what ILockable actually buys you across Chest,
+Door, and LockedJournal. I can walk through a class and explain what it
+does and why it exists. I cannot walk through a thousand lines of
+GameEngine and recite it from memory, and I won't pretend otherwise.
 
-*Hardest part: the MonsterLoot elimination (Phase E). NPCs already had
-an Inventory via the Phase 1.5 Character promotion — but the migration
-had to atomically move loot items from MonsterLoot containers to the
-NPC's Inventory before dropping the MonsterLoot discriminator, with
-correct handling of the Inventory_OwnerCharacterId TPH column name.
-One wrong column reference and the migration loses loot data silently.*
+What I did bring to this project was the design instinct. MonsterLoot
+always bothered me — it felt like the world was organized around the
+player taking things rather than around NPCs being real entities. When
+we talked through the LucentForge bible and what it says about NPCs as
+agents, the decision to remove MonsterLoot wasn't a technical call, it
+was a design call. Same with Gobby — I didn't just want a renamed goblin,
+I wanted two documents that tell the same story from opposite sides and
+let neither one win. That kind of thing is mine.
 
-*What I'd build next: the Container TPH redesign (Phase E was a
-preview) has one more target — Equipment as a separate owned container
-vs. the current slot-based model. And the bible-aligned endgame is a
-full `World : ISimulation` layer that uses this relational model as the
-persistent state for LucentForge's sim-runtime.*
+What's next: this database is the foundation for LucentForge, a game I'm
+actually building. The goal is an NPC runtime layer that drives behavior
+using the Stats and Resources already in the schema. Phase E was the
+first step toward that — an enemy who owns their inventory is an enemy
+who can eventually decide what to do with it. The database is starting to
+feel like a world, which is what I wanted it to be.
 
 ---
 
