@@ -3091,8 +3091,10 @@ public class GameEngine
             var choices = new List<string> { "⚔  Attack" };
             var abilities = player.Abilities.Where(a => a.Kind == AbilityKind.Attack).ToList();
             if (abilities.Any()) choices.Add("✦  Ability");
-            var magics = player.Magics.Where(m => m.Kind == MagicKind.Attack && (player.Resources?.BytePool ?? 0) >= m.BytePoolCost).ToList();
-            if (player.Magics.Any()) choices.Add("⚡  Bytes (Magic)");
+            var magics = player.Magics.Where(m => m.Kind == MagicKind.Attack
+                && (player.Resources?.BitPool ?? 0) >= m.BitPoolCost
+                && (player.Resources?.BytePool ?? 0) >= m.BytePoolCost).ToList();
+            if (player.Magics.Any()) choices.Add("⚡  Magic");
             var consumables = player.Inventory?.ItemsCollection.OfType<Consumable>()
                 .Where(c => c.Effect == ConsumableEffect.Heal || c.Effect == ConsumableEffect.Stamina).ToList() ?? new List<Consumable>();
             if (consumables.Any()) choices.Add("🧪  Item");
@@ -3114,7 +3116,7 @@ public class GameEngine
             {
                 var abil = AnsiConsole.Prompt(new SelectionPrompt<string>()
                     .Title("  Choose ability:")
-                    .AddChoices(abilities.Select(a => $"{a.Name} (SP {a.StaminaCost}, Pow {a.Power})")));
+                    .AddChoices(abilities.Select(a => $"{a.Name} (SP {a.StaminaCost}, Power {a.Power})")));
                 var chosen = abilities[abilities.FindIndex(a => abil.StartsWith(a.Name))];
                 if ((player.Resources?.Sp ?? 0) >= chosen.StaminaCost)
                 {
@@ -3134,17 +3136,30 @@ public class GameEngine
                     var availMagics = player.Magics.ToList();
                     var mSel = AnsiConsole.Prompt(new SelectionPrompt<string>()
                         .Title("  Choose spell:")
-                        .AddChoices(availMagics.Select(m => $"{m.Name} (Bytes {m.BytePoolCost}, Pow {m.Power})")));
+                        .AddChoices(availMagics.Select(m =>
+                        {
+                            string cost = m.BitPoolCost > 0 ? $"{m.BitPoolCost} Bits" : $"{m.BytePoolCost} Bytes";
+                            return $"{m.Name} ({cost}, Power {m.Power})";
+                        })));
                     var mChosen = availMagics[availMagics.FindIndex(m => mSel.StartsWith(m.Name))];
-                    if ((player.Resources?.BytePool ?? 0) >= mChosen.BytePoolCost)
+                    bool canCast = (player.Resources?.BitPool ?? 0) >= mChosen.BitPoolCost
+                                && (player.Resources?.BytePool ?? 0) >= mChosen.BytePoolCost;
+                    if (canCast)
                     {
-                        if (player.Resources is not null) player.Resources.BytePool -= mChosen.BytePoolCost;
+                        if (player.Resources is not null)
+                        {
+                            player.Resources.BitPool -= mChosen.BitPoolCost;
+                            player.Resources.BytePool -= mChosen.BytePoolCost;
+                        }
                         pDmg = Math.Max(1, mChosen.Power + rng.Next(1, 7) - npc.GetTotalDefense());
                         if (npc.Resources is not null) npc.Resources.Hp = Math.Max(0, npc.Resources.Hp - pDmg);
                         AnsiConsole.MarkupLine($"  [magenta]{Markup.Escape(mChosen.Name)}[/] hits for [red]{pDmg}[/] damage.");
                     }
                     else
-                        AnsiConsole.MarkupLine("  [yellow]Not enough BytePool.[/] Turn wasted.");
+                    {
+                        string poolName = mChosen.BitPoolCost > 0 ? "BitPool" : "BytePool";
+                        AnsiConsole.MarkupLine($"  [yellow]Not enough {poolName}.[/] Turn wasted.");
+                    }
                 }
             }
             else if (action.StartsWith("🧪") && consumables.Any())
