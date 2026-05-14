@@ -3048,13 +3048,16 @@ public class GameEngine
         }
     }
 
+    // Tracks whether Mira has already given the cellar-clear reward this session.
+    private bool _cellarRewarded = false;
+
     private void PlayerNpcInteraction(Character player, Character npc)
     {
         bool dead = (npc.Resources?.Hp ?? 1) <= 0;
-        Console.WriteLine($"\n  {npc.Name} — {npc.TypeName}, Lv {npc.Level}");
 
         if (dead)
         {
+            Console.WriteLine($"\n  {Markup.Escape(npc.Name)} — defeated.");
             Console.Write("  (l)oot body / (c)ancel: ");
             var c = Console.ReadLine()?.Trim().ToLower();
             if (c == "l" && npc.Inventory is not null)
@@ -3062,13 +3065,243 @@ public class GameEngine
             return;
         }
 
+        // Named dialogue dispatch
+        switch (npc.Name)
+        {
+            case "Mira":                 MiraDialogue(player, npc);    return;
+            case "Gobby":                GobbyDialogue(player, npc);   return;
+            case "Erasmus the Unbound":  ErasmusDialogue(player, npc); return;
+        }
+
+        // Generic NPC fallback
+        Console.WriteLine($"\n  {Markup.Escape(npc.Name)} — {npc.TypeName}, Lv {npc.Level}");
         Console.WriteLine($"  HP: {npc.Resources?.Hp}/{npc.Resources?.MaxHp}  " +
                           $"ATK: {npc.GetTotalAttack()}  DEF: {npc.GetTotalDefense()}");
         Console.Write("  (f)ight / (e)xamine / (c)ancel: ");
         var choice = Console.ReadLine()?.Trim().ToLower();
         if (choice == "f") PlayerFightNpc(player, npc);
         else if (choice == "e")
-            Console.WriteLine($"  {npc.Name} watches you carefully.");
+            Console.WriteLine($"  {Markup.Escape(npc.Name)} watches you carefully.");
+    }
+
+    private void MiraDialogue(Character player, Character mira)
+    {
+        bool cellarCleared = IsCellarCleared();
+
+        while (true)
+        {
+            Console.Clear();
+            AnsiConsole.MarkupLine("[bold yellow]Mira[/] leans on the bar and gives you a measured look.");
+            Console.WriteLine();
+
+            var opts = new List<string>
+            {
+                "\"What can you tell me about the area?\"",
+                "\"Do you have anything for sale?\"",
+            };
+
+            if (!cellarCleared)
+                opts.Add("\"Something's been making noise in your cellar.\"");
+            else if (!_cellarRewarded)
+                opts.Add("\"The cellar is clear — I dealt with your rat problem.\"");
+
+            opts.Add("\"Goodbye.\"");
+
+            var pick = AnsiConsole.Prompt(
+                new SelectionPrompt<string>().Title("  [grey]You say:[/]").AddChoices(opts));
+
+            if (pick.StartsWith("\"What can you tell"))
+            {
+                Console.WriteLine();
+                AnsiConsole.MarkupLine("  [bold yellow]Mira:[/] \"The Thornwood's been restless lately. Goblins closer");
+                AnsiConsole.MarkupLine("  to town than they should be — there's a camp north along the trail.");
+                AnsiConsole.MarkupLine("  And stay away from that old chapel further east. Door's been rigged");
+                AnsiConsole.MarkupLine("  since before my grandmother's time. Nobody worth trusting goes in there.\"");
+                Console.WriteLine();
+                AnsiConsole.MarkupLine("  [grey]She pauses, then adds quietly:[/]");
+                AnsiConsole.MarkupLine("  [bold yellow]Mira:[/] \"Whatever was sealed beneath that vault — let it stay sealed.\"");
+                _gameUi.PauseAndClear();
+            }
+            else if (pick.StartsWith("\"Do you have anything"))
+            {
+                MiraShop(player, mira);
+            }
+            else if (pick.StartsWith("\"Something's been making"))
+            {
+                Console.WriteLine();
+                AnsiConsole.MarkupLine("  [bold yellow]Mira:[/] \"Ha. You noticed that too? Something got in through the old drain.");
+                AnsiConsole.MarkupLine("  Big. Knocked over half a barrel of my best stock. If you can clear it out,");
+                AnsiConsole.MarkupLine("  I'll make it worth your while.\"");
+                _gameUi.PauseAndClear();
+                break;
+            }
+            else if (pick.StartsWith("\"The cellar is clear"))
+            {
+                Console.WriteLine();
+                AnsiConsole.MarkupLine("  [bold yellow]Mira:[/] \"Already? Good. Didn't even hear a scream — you're either");
+                AnsiConsole.MarkupLine("  very capable or very quiet. Either way, take this.\"");
+                Console.WriteLine();
+                AnsiConsole.MarkupLine("  [green]Mira hands you a Healing Potion and a Lockpick.[/]");
+
+                if (player.Inventory is not null)
+                {
+                    var potion = new ConsoleRpgEntities.Models.Items.Consumable
+                    {
+                        Name = "Healing Potion",
+                        Description = "A ruby flask that warms on the way down. Restores 25 HP.",
+                        Value = 30, Weight = 1,
+                        Effect = ConsoleRpgEntities.Models.Enums.ConsumableEffect.Heal,
+                        Potency = 25
+                    };
+                    var pick2 = new ConsoleRpgEntities.Models.Items.Consumable
+                    {
+                        Name = "Lockpick",
+                        Description = "A thin wire pick. Breaks on a bad roll.",
+                        Value = 15, Weight = 0,
+                        KeyId = ConsoleRpgEntities.Models.Items.Item.LockpickKeyId,
+                        Effect = ConsoleRpgEntities.Models.Enums.ConsumableEffect.None
+                    };
+                    player.Inventory.AddItem(potion);
+                    player.Inventory.AddItem(pick2);
+                    _dbContext.SaveChanges();
+                }
+                _cellarRewarded = true;
+                cellarCleared = true;
+                _gameUi.PauseAndClear();
+            }
+            else // Goodbye
+            {
+                break;
+            }
+        }
+    }
+
+    private void MiraShop(Character player, Character mira)
+    {
+        if (mira.Inventory is null || !mira.Inventory.ItemsCollection.Any())
+        {
+            AnsiConsole.MarkupLine("  [bold yellow]Mira:[/] \"Sold out, I'm afraid. Come back when I've restocked.\"");
+            _gameUi.PauseAndClear();
+            return;
+        }
+
+        while (true)
+        {
+            Console.Clear();
+            AnsiConsole.MarkupLine("[bold yellow]Mira's Shop[/]");
+            Console.WriteLine();
+
+            var shopItems = mira.Inventory.ItemsCollection.ToList();
+            var shopChoices = shopItems
+                .Select(i => $"{i.Name} — {i.Description} [{i.Value}g]")
+                .Append("Leave shop")
+                .ToList();
+
+            var sel = AnsiConsole.Prompt(
+                new SelectionPrompt<string>().Title("  [grey]What will you take?[/]").AddChoices(shopChoices));
+
+            if (sel == "Leave shop") break;
+
+            var chosen = shopItems[shopChoices.IndexOf(sel)];
+            if (player.PickUp(chosen))
+            {
+                mira.Inventory.RemoveItem(chosen);
+                AnsiConsole.MarkupLine($"  [green]You take {Markup.Escape(chosen.Name)}.[/]");
+                _dbContext.SaveChanges();
+            }
+            else
+            {
+                AnsiConsole.MarkupLine("  [red]You can't carry that.[/]");
+            }
+
+            if (!mira.Inventory.ItemsCollection.Any()) break;
+            _gameUi.PauseAndClear();
+        }
+    }
+
+    private bool IsCellarCleared()
+    {
+        var rat = _dbContext.Characters.ToList()
+            .FirstOrDefault(c => c.Name == "Giant Cellar Rat");
+        return rat?.Resources?.Hp <= 0;
+    }
+
+    private void GobbyDialogue(Character player, Character gobby)
+    {
+        Console.Clear();
+        AnsiConsole.MarkupLine("[bold green]Gobby[/] spins around, pointing a jagged cleaver at you.");
+        Console.WriteLine();
+        AnsiConsole.MarkupLine("  [bold green]Gobby:[/] \"Oi! Who dares walk into Gobby's camp? You lost, soft-skin?\"");
+        Console.WriteLine();
+
+        var pick = AnsiConsole.Prompt(new SelectionPrompt<string>()
+            .Title("  [grey]You say:[/]")
+            .AddChoices(
+                "\"I'm here to fight.\"",
+                "\"I'm just passing through.\"",
+                "\"Nice camp you have here.\""
+            ));
+
+        Console.WriteLine();
+        if (pick.StartsWith("\"I'm here"))
+        {
+            AnsiConsole.MarkupLine("  [bold green]Gobby:[/] \"Ohoho! Brave words, soft-skin. Gobby loves brave words.");
+            AnsiConsole.MarkupLine("  Makes the winning sweeter. COME THEN!\"");
+        }
+        else if (pick.StartsWith("\"I'm just passing"))
+        {
+            AnsiConsole.MarkupLine("  [bold green]Gobby:[/] \"Passing THROUGH? Through Gobby's camp?\"");
+            AnsiConsole.MarkupLine("  [grey]Gobby's eyes narrow to slits.[/]");
+            AnsiConsole.MarkupLine("  [bold green]Gobby:[/] \"Nobody passes through. Gobby ALWAYS gets a toll.\"");
+        }
+        else
+        {
+            AnsiConsole.MarkupLine("  [bold green]Gobby:[/] \"...Heh. Gobby does have good taste.\"");
+            AnsiConsole.MarkupLine("  [grey]Gobby preens briefly, then his expression hardens.[/]");
+            AnsiConsole.MarkupLine("  [bold green]Gobby:[/] \"But now Gobby have YOUR stuff! CHARGE!\"");
+        }
+
+        Console.WriteLine();
+        _gameUi.PauseAndClear();
+        PlayerFightNpc(player, gobby);
+    }
+
+    private void ErasmusDialogue(Character player, Character erasmus)
+    {
+        Console.Clear();
+        AnsiConsole.MarkupLine("[bold magenta]The air in the vault shifts. Something stirs.[/]");
+        Console.WriteLine();
+        System.Threading.Thread.Sleep(800);
+
+        AnsiConsole.MarkupLine("  [bold magenta]Erasmus:[/] \"Do you feel that?\"");
+        System.Threading.Thread.Sleep(600);
+        AnsiConsole.MarkupLine("  [bold magenta]Erasmus:[/] \"The seal... it [italic]breaks[/].\"");
+        System.Threading.Thread.Sleep(800);
+        Console.WriteLine();
+
+        AnsiConsole.MarkupLine("  [bold magenta]Erasmus:[/] \"I have waited here for three hundred years, bound by");
+        AnsiConsole.MarkupLine("  cowards who feared what I could become. Three centuries of");
+        AnsiConsole.MarkupLine("  silence. Three centuries of [bold]patience[/].\"");
+        Console.WriteLine();
+        System.Threading.Thread.Sleep(1000);
+
+        AnsiConsole.MarkupLine("  [bold magenta]Erasmus:[/] \"And now some wandering fool cracks the seal and walks");
+        AnsiConsole.MarkupLine("  in with [italic]mud on their boots[/].\"");
+        Console.WriteLine();
+        System.Threading.Thread.Sleep(700);
+
+        AnsiConsole.MarkupLine("  A figure rises from the shattered sarcophagus — skeletal,");
+        AnsiConsole.MarkupLine("  robed, eyes burning cold blue.");
+        Console.WriteLine();
+        System.Threading.Thread.Sleep(800);
+
+        AnsiConsole.MarkupLine("  [bold magenta]Erasmus:[/] \"I am [bold white]ERASMUS THE UNBOUND[/] — and I am [bold]free[/].");
+        AnsiConsole.MarkupLine("  You... unfortunate soul. You should have left the key");
+        AnsiConsole.MarkupLine("  where you found it.\"");
+        Console.WriteLine();
+
+        _gameUi.PauseAndClear();
+        PlayerFightNpc(player, erasmus);
     }
 
     private void PlayerFightNpc(Character player, Character npc)
