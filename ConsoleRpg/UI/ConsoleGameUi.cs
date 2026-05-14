@@ -10,10 +10,21 @@ public class ConsoleGameUi : IGameUi
     private static void DrawBanner()
     {
         Console.WriteLine("╔══════════════════════════════════════════╗");
-        Console.WriteLine("║       W13 Console RPG — LucentForge     ║");
-        Console.WriteLine("║      Chests, Monster Loot & Lockpicks   ║");
+        Console.WriteLine("║            T H E   F O R G E            ║");
+        Console.WriteLine("║       A LucentForge Database Demo       ║");
         Console.WriteLine("╚══════════════════════════════════════════╝");
         Console.WriteLine();
+    }
+
+    public string GetModeChoice()
+    {
+        Console.Clear();
+        DrawBanner();
+        Console.WriteLine("  p. Play");
+        Console.WriteLine("  a. Admin");
+        Console.WriteLine("  0. Exit");
+        Console.Write("\nChoice: ");
+        return Console.ReadLine()?.Trim().ToLower() ?? string.Empty;
     }
 
     public string GetMenuChoice()

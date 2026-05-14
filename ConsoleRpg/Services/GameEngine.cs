@@ -30,6 +30,8 @@ public class GameEngine
     public string? ActiveCharacterLabel =>
         _activeCharacter is null ? null : $"{_activeCharacter.Name} ({_activeCharacter.TypeName})";
 
+    public bool HasActiveCharacter => _activeCharacter is not null;
+
     // Startup data-integrity sweep:
     //   1. Stats row must exist for every Character (default to all zeros).
     //   2. EquipmentSlots must only hold items whose EligibleSlot matches the slot.
@@ -1857,6 +1859,7 @@ public class GameEngine
         var richest = _dbContext.Containers
             .OfType<Chest>()
             .Where(c => c.IsLocked)
+            .ToList()
             .OrderByDescending(c => c.ItemsCollection.Sum(i => i.Value))
             .FirstOrDefault();
 
@@ -2676,6 +2679,12 @@ public class GameEngine
     // -------------------------------------------------------------------------
     // W15 Phase G — LINQ Queries submenu
     // -------------------------------------------------------------------------
+
+    public void PlayerLoop()
+    {
+        // Full implementation in C0045. Placeholder builds clean.
+        Console.WriteLine("\n[Player loop coming in next commit — returning to menu.]");
+    }
 
     public void QueriesMenu()
     {
