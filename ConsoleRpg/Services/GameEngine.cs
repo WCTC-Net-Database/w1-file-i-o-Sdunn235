@@ -1669,11 +1669,17 @@ public class GameEngine
 
         if (key.KeyId == Item.LockpickKeyId)
         {
-            // If the lockpick is gone from inventory it broke; if still there the lock just resisted.
+            // If the lockpick is gone from inventory it broke; if still there the lock resisted or wasn't pickable.
             bool broke = !(player.Inventory?.ItemsCollection.Contains(key) ?? false);
-            Console.WriteLine(broke
-                ? $"\nThe lockpick snaps. {targetLabel} stays shut."
-                : $"\nThis lock resists the pick. {targetLabel} stays shut.");
+            if (broke)
+                Console.WriteLine($"\nThe lockpick snaps. {targetLabel} stays shut.");
+            else if (!target.IsPickable)
+            {
+                Console.WriteLine($"\nThis lock cannot be picked — it requires a specific key.");
+                HintForKeyIfNeeded(target, targetLabel);
+            }
+            else
+                Console.WriteLine($"\nThis lock resists the pick. {targetLabel} stays shut.");
         }
         else
         {
@@ -2869,9 +2875,7 @@ public class GameEngine
         {
             var d = exits[i];
             var other = d.GetOtherRoom(room);
-            var flags = (d.IsLocked ? " [LOCKED]" : "")
-                      + (d.IsTrapped && !d.TrapDisarmed ? $" [{d.TrapTypes} TRAP]" : "");
-            Console.WriteLine($"    [{i + 1}] {d.Name} → {other.Name}{flags}");
+            Console.WriteLine($"    [{i + 1}] {d.Name} → {other.Name}");
         }
 
         // --- Objects (lettered a,b,c…) ---
@@ -2895,8 +2899,7 @@ public class GameEngine
         foreach (var chest in chests)
         {
             char ltr = (char)('a' + letterIdx++);
-            string status = chest.IsLocked ? "[yellow]locked[/]" : "[green]unlocked[/]";
-            AnsiConsole.MarkupLine($"    [[{ltr}]] {Markup.Escape(chest.Name)} — {status}");
+            AnsiConsole.MarkupLine($"    [[{ltr}]] {Markup.Escape(chest.Name)} [grey](chest)[/]");
             _roomObjects.Add(chest);
             anything = true;
         }
@@ -3016,33 +3019,36 @@ public class GameEngine
 
     private void PlayerBookshelfInteraction(Character player, Bookshelf shelf)
     {
-        var tomes = shelf.ItemsCollection.OfType<Tome>().ToList();
+        var books = shelf.ItemsCollection.ToList();
         Console.WriteLine($"\n  {shelf.Name}");
         if (!string.IsNullOrWhiteSpace(shelf.Description))
             Console.WriteLine($"  {shelf.Description}");
 
-        if (!tomes.Any()) { Console.WriteLine("  (empty)"); return; }
+        if (!books.Any()) { Console.WriteLine("  (empty)"); return; }
 
-        for (int i = 0; i < tomes.Count; i++)
-            Console.WriteLine($"    [{i + 1}] {tomes[i].Name}");
+        for (int i = 0; i < books.Count; i++)
+            Console.WriteLine($"    [{i + 1}] {books[i].Name}");
 
         Console.Write("  Which # (0 to cancel): ");
-        if (!int.TryParse(Console.ReadLine()?.Trim(), out int tomeIdx) || tomeIdx < 1 || tomeIdx > tomes.Count)
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int idx) || idx < 1 || idx > books.Count)
             return;
 
-        var tome = tomes[tomeIdx - 1];
+        var book = books[idx - 1];
+        // Tomes have LoreText; other items (seeded as Consumable) use Description.
+        string readText = book is Tome t ? t.LoreText : book.Description;
+
         Console.Write("  (r)ead in place / (t)ake to inventory / (c)ancel: ");
         var act = Console.ReadLine()?.Trim().ToLower();
         if (act == "r")
         {
-            Console.WriteLine($"\n=== {tome.Name} ===");
-            Console.WriteLine(tome.LoreText);
+            Console.WriteLine($"\n=== {book.Name} ===");
+            Console.WriteLine(readText);
             Console.WriteLine("===========================");
         }
         else if (act == "t")
         {
-            if (player.TakeItemFrom(shelf, tome))
-            { Console.WriteLine($"  Took {tome.Name}."); _dbContext.SaveChanges(); }
+            if (player.TakeItemFrom(shelf, book))
+            { Console.WriteLine($"  Took {book.Name}."); _dbContext.SaveChanges(); }
             else
                 Console.WriteLine("  Can't carry that.");
         }
@@ -3327,7 +3333,7 @@ public class GameEngine
             var magics = player.Magics.Where(m => m.Kind == MagicKind.Attack
                 && (player.Resources?.BitPool ?? 0) >= m.BitPoolCost
                 && (player.Resources?.BytePool ?? 0) >= m.BytePoolCost).ToList();
-            if (player.Magics.Any()) choices.Add("⚡  Magic");
+            if (magics.Any()) choices.Add("⚡  Magic");
             var consumables = player.Inventory?.ItemsCollection.OfType<Consumable>()
                 .Where(c => c.Effect == ConsumableEffect.Heal || c.Effect == ConsumableEffect.Stamina).ToList() ?? new List<Consumable>();
             if (consumables.Any()) choices.Add("🧪  Item");
@@ -3363,10 +3369,10 @@ public class GameEngine
             }
             else if (action.StartsWith("⚡"))
             {
-                if (!player.Magics.Any()) { AnsiConsole.MarkupLine("  No magic learned."); }
+                if (!magics.Any()) { AnsiConsole.MarkupLine("  No attack magic available."); }
                 else
                 {
-                    var availMagics = player.Magics.ToList();
+                    var availMagics = magics;
                     var mSel = AnsiConsole.Prompt(new SelectionPrompt<string>()
                         .Title("  Choose spell:")
                         .AddChoices(availMagics.Select(m =>
