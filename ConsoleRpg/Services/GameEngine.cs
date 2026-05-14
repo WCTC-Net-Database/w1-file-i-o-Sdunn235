@@ -1104,19 +1104,17 @@ public class GameEngine
     }
 
     // After-creation placement picker. Sets ContainerId on the new Item so it
-    // lands in a Chest / MonsterLoot / Room floor / Character inventory in the
-    // same step it's created — instead of always saving as ContainerId=NULL
-    // and forcing a table edit to seed test scenarios (encumbrance, loot,
-    // floor pickup). Item is not yet attached to the context; setting the FK
-    // is enough — EF inserts with that container reference on SaveChanges.
+    // lands in a Chest / NPC inventory / Room floor / Character inventory in
+    // the same step it's created — instead of always saving as ContainerId=NULL.
+    // W15 Phase E: option 3 changed from MonsterLoot to NPC inventory.
     private void PromptItemPlacement(Item item)
     {
         Console.WriteLine("\nPlace this item:");
         Console.WriteLine("  0. Unowned (default)");
         Console.WriteLine("  1. Character inventory");
         Console.WriteLine("  2. Chest");
-        Console.WriteLine("  3. Monster loot");
-        Console.WriteLine("  4. Room floor   (no in-game pickup UI yet — seeding only)");
+        Console.WriteLine("  3. NPC inventory");
+        Console.WriteLine("  4. Room floor");
         Console.Write("Choice [0]: ");
         var choice = Console.ReadLine()?.Trim();
 
@@ -1145,13 +1143,14 @@ public class GameEngine
                 break;
 
             case "3":
-                var loots = _dbContext.Containers.OfType<MonsterLoot>().ToList();
-                if (loots.Count == 0) { Console.WriteLine("  No monster loot containers exist."); return; }
-                for (int i = 0; i < loots.Count; i++)
-                    Console.WriteLine($"  {i + 1}. {loots[i].Name}  (Id {loots[i].Id})");
+                var npcs = _dbContext.Characters.OfType<Npc>()
+                    .Where(n => n.Inventory != null).ToList();
+                if (npcs.Count == 0) { Console.WriteLine("  No NPCs with inventories."); return; }
+                for (int i = 0; i < npcs.Count; i++)
+                    Console.WriteLine($"  {i + 1}. {npcs[i].Name}  (bag: {npcs[i].Inventory!.Name})");
                 Console.Write("Pick: ");
-                if (int.TryParse(Console.ReadLine(), out var li) && li >= 1 && li <= loots.Count)
-                    item.ContainerId = loots[li - 1].Id;
+                if (int.TryParse(Console.ReadLine(), out var ni) && ni >= 1 && ni <= npcs.Count)
+                    item.ContainerId = npcs[ni - 1].Inventory!.Id;
                 else Console.WriteLine("  Invalid — left unowned.");
                 break;
 
@@ -1629,9 +1628,13 @@ public class GameEngine
     {
         if (player.RoomId is null) { Console.WriteLine("\nPlayer is not in a room."); return; }
 
+        // W15 Phase E: NPC loot lives in NPC.Inventory (MonsterLoot eliminated).
+        // Show NPCs in room with non-empty Inventory — empty inventory = nothing left.
         var monsters = _dbContext.Characters
             .OfType<Npc>()
-            .Where(n => n.RoomId == player.RoomId && n.LootId != null)
+            .Where(n => n.RoomId == player.RoomId && n.Inventory != null)
+            .ToList()
+            .Where(n => n.Inventory!.ItemsCollection.Any())
             .ToList();
 
         if (!monsters.Any()) { Console.WriteLine("\nNo defeated monsters here to loot."); return; }
@@ -1639,8 +1642,8 @@ public class GameEngine
         Console.WriteLine("\n--- Defeated monsters here ---");
         foreach (var m in monsters)
         {
-            string status = m.Loot?.IsLooted == true ? "(already looted)" : "(unlooted)";
-            Console.WriteLine($"  [{m.Id}] {m.Name} ({m.Race?.Name}) {status}");
+            int count = m.Inventory?.ItemsCollection.Count ?? 0;
+            Console.WriteLine($"  [{m.Id}] {m.Name} ({m.Race?.Name}) ({count} item(s))");
         }
 
         Console.Write("Monster ID: ");
@@ -1648,13 +1651,13 @@ public class GameEngine
         var monster = monsters.FirstOrDefault(m => m.Id == id);
         if (monster is null) { Console.WriteLine("Not in this room."); return; }
 
-        if (monster.Loot is null) { Console.WriteLine("\nNothing to loot."); return; }
+        if (monster.Inventory is null || !monster.Inventory.ItemsCollection.Any())
+        {
+            Console.WriteLine("\nNothing to loot.");
+            return;
+        }
 
-        LootInteractive(player, monster.Loot, $"On {monster.Name}'s body");
-        // Mark as searched once the player exits the picker — the body's been
-        // processed, even if items were left behind because the looter
-        // couldn't carry them.
-        monster.Loot.IsLooted = true;
+        LootInteractive(player, monster.Inventory, $"On {monster.Name}'s body");
         _dbContext.SaveChanges();
     }
 

@@ -1,11 +1,8 @@
-using ConsoleRpgEntities.Models.Containers;
-
 namespace ConsoleRpgEntities.Models;
 
 public class Npc : Character
 {
-    // W13 — optional MonsterLoot container. Empty/null until a loot table seeds one.
-    // Nullable so non-monster NPCs (shopkeepers, quest givers) carry no loot.
-    public int? LootId { get; set; }
-    public virtual MonsterLoot? Loot { get; set; }
+    // W15 Phase E: MonsterLoot eliminated. NPC loot lives in the NPC's
+    // Inventory (inherited from Character). Inventory is non-null for any
+    // NPC created via AddCharacter (integrity sweep auto-creates one).
 }

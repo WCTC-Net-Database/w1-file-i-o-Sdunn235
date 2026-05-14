@@ -105,16 +105,17 @@ public class GameContext : DbContext, IContext
             .HasValue<Consumable>("Consumable");
 
         // --- Container TPH ---
-        // W14 Phase C.1: Room joins Inventory/Equipment/Chest/MonsterLoot under
-        // the Containers table. Items on the floor of a room are now stored the
-        // same way as items in any other container — same Items table, same
+        // W14 Phase C.1: Room joins Inventory/Equipment/Chest under the
+        // Containers table. Items on the floor of a room are stored the same
+        // way as items in any other container — same Items table, same
         // ContainerId FK, same Container.AddItem/RemoveItem semantics.
+        // W15 Phase E: MonsterLoot removed. NPC loot lives in the NPC's
+        // Inventory (Character already owns Inventory via Phase 1.5).
         modelBuilder.Entity<Container>()
             .HasDiscriminator<string>("ContainerType")
             .HasValue<Inventory>("Inventory")
             .HasValue<Equipment>("Equipment")
             .HasValue<Chest>("Chest")           // W13
-            .HasValue<MonsterLoot>("MonsterLoot")  // W13
             .HasValue<Room>("Room");            // W14 Phase C.1
 
         // W13 — Chest → Room (many-to-one, nullable).
@@ -130,13 +131,6 @@ public class GameContext : DbContext, IContext
             .WithMany()
             .HasForeignKey(c => c.RoomId)
             .OnDelete(DeleteBehavior.NoAction);
-
-        // W13 — Npc → MonsterLoot (one-to-one, nullable)
-        modelBuilder.Entity<Npc>()
-            .HasOne(n => n.Loot)
-            .WithOne()
-            .HasForeignKey<Npc>(n => n.LootId)
-            .OnDelete(DeleteBehavior.SetNull);
 
         // Container → Items (one-to-many, nullable: items can float)
         modelBuilder.Entity<Container>()
