@@ -3074,37 +3074,116 @@ public class GameEngine
     private void PlayerFightNpc(Character player, Character npc)
     {
         var rng = new Random();
-        AnsiConsole.MarkupLine($"\n  [bold red]-- {player.Name} vs. {npc.Name}! --[/]\n");
+        AnsiConsole.MarkupLine($"\n  [bold red]⚔ {Markup.Escape(player.Name)} vs. {Markup.Escape(npc.Name)}![/]\n");
 
         int round = 1;
+        bool fled = false;
+
         while ((player.Resources?.Hp ?? 0) > 0 && (npc.Resources?.Hp ?? 0) > 0)
         {
-            // Player attacks
-            int pDmg = Math.Max(1, player.GetTotalAttack() + rng.Next(1, 7) - npc.GetTotalDefense());
-            if (npc.Resources is not null)
-                npc.Resources.Hp = Math.Max(0, npc.Resources.Hp - pDmg);
+            // Status header
             AnsiConsole.MarkupLine(
-                $"  Round {round}: You hit for [red]{pDmg}[/]. " +
-                $"{npc.Name} HP: [yellow]{npc.Resources?.Hp}[/]/{npc.Resources?.MaxHp}");
+                $"  [bold]Round {round}[/]  " +
+                $"[green]Your HP {player.Resources?.Hp}/{player.Resources?.MaxHp}[/]  " +
+                $"[yellow]{Markup.Escape(npc.Name)} HP {npc.Resources?.Hp}/{npc.Resources?.MaxHp}[/]");
+
+            // Player action menu
+            var choices = new List<string> { "⚔  Attack" };
+            var abilities = player.Abilities.Where(a => a.Kind == AbilityKind.Attack).ToList();
+            if (abilities.Any()) choices.Add("✦  Ability");
+            var magics = player.Magics.Where(m => m.Kind == MagicKind.Attack && (player.Resources?.BytePool ?? 0) >= m.BytePoolCost).ToList();
+            if (player.Magics.Any()) choices.Add("⚡  Bytes (Magic)");
+            var consumables = player.Inventory?.ItemsCollection.OfType<Consumable>()
+                .Where(c => c.Effect == ConsumableEffect.Heal || c.Effect == ConsumableEffect.Stamina).ToList() ?? new List<Consumable>();
+            if (consumables.Any()) choices.Add("🧪  Item");
+            choices.Add("🚪  Flee");
+
+            var action = AnsiConsole.Prompt(
+                new SelectionPrompt<string>()
+                    .Title("  [grey]Your action:[/]")
+                    .AddChoices(choices));
+
+            int pDmg = 0;
+            if (action.StartsWith("⚔"))
+            {
+                pDmg = Math.Max(1, player.GetTotalAttack() + rng.Next(1, 7) - npc.GetTotalDefense());
+                if (npc.Resources is not null) npc.Resources.Hp = Math.Max(0, npc.Resources.Hp - pDmg);
+                AnsiConsole.MarkupLine($"  You strike for [red]{pDmg}[/] damage.");
+            }
+            else if (action.StartsWith("✦") && abilities.Any())
+            {
+                var abil = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                    .Title("  Choose ability:")
+                    .AddChoices(abilities.Select(a => $"{a.Name} (SP {a.StaminaCost}, Pow {a.Power})")));
+                var chosen = abilities[abilities.FindIndex(a => abil.StartsWith(a.Name))];
+                if ((player.Resources?.Sp ?? 0) >= chosen.StaminaCost)
+                {
+                    if (player.Resources is not null) player.Resources.Sp -= chosen.StaminaCost;
+                    pDmg = Math.Max(1, chosen.Power + rng.Next(1, 7) - npc.GetTotalDefense());
+                    if (npc.Resources is not null) npc.Resources.Hp = Math.Max(0, npc.Resources.Hp - pDmg);
+                    AnsiConsole.MarkupLine($"  [cyan]{Markup.Escape(chosen.Name)}[/] hits for [red]{pDmg}[/] damage.");
+                }
+                else
+                    AnsiConsole.MarkupLine("  [yellow]Not enough Stamina.[/] Turn wasted.");
+            }
+            else if (action.StartsWith("⚡"))
+            {
+                if (!player.Magics.Any()) { AnsiConsole.MarkupLine("  No magic learned."); }
+                else
+                {
+                    var availMagics = player.Magics.ToList();
+                    var mSel = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                        .Title("  Choose spell:")
+                        .AddChoices(availMagics.Select(m => $"{m.Name} (Bytes {m.BytePoolCost}, Pow {m.Power})")));
+                    var mChosen = availMagics[availMagics.FindIndex(m => mSel.StartsWith(m.Name))];
+                    if ((player.Resources?.BytePool ?? 0) >= mChosen.BytePoolCost)
+                    {
+                        if (player.Resources is not null) player.Resources.BytePool -= mChosen.BytePoolCost;
+                        pDmg = Math.Max(1, mChosen.Power + rng.Next(1, 7) - npc.GetTotalDefense());
+                        if (npc.Resources is not null) npc.Resources.Hp = Math.Max(0, npc.Resources.Hp - pDmg);
+                        AnsiConsole.MarkupLine($"  [magenta]{Markup.Escape(mChosen.Name)}[/] hits for [red]{pDmg}[/] damage.");
+                    }
+                    else
+                        AnsiConsole.MarkupLine("  [yellow]Not enough BytePool.[/] Turn wasted.");
+                }
+            }
+            else if (action.StartsWith("🧪") && consumables.Any())
+            {
+                var iSel = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                    .Title("  Use which item?")
+                    .AddChoices(consumables.Select(c => $"{c.Name} (+{c.Potency} {c.Effect})")));
+                var iChosen = consumables[consumables.FindIndex(c => iSel.StartsWith(c.Name))];
+                player.UseItem(iChosen);
+                AnsiConsole.MarkupLine($"  Used [italic]{Markup.Escape(iChosen.Name)}[/].");
+            }
+            else if (action.StartsWith("🚪"))
+            {
+                AnsiConsole.MarkupLine("  You break away and escape!");
+                fled = true;
+                break;
+            }
 
             if ((npc.Resources?.Hp ?? 0) <= 0) break;
 
-            // NPC attacks
+            // NPC attacks back
             int nDmg = Math.Max(1, npc.GetTotalAttack() + rng.Next(1, 7) - player.GetTotalDefense());
             if (player.Resources is not null)
                 player.Resources.Hp = Math.Max(0, player.Resources.Hp - nDmg);
             AnsiConsole.MarkupLine(
-                $"  Round {round}: {npc.Name} hits for [red]{nDmg}[/]. " +
+                $"  {Markup.Escape(npc.Name)} retaliates for [red]{nDmg}[/]. " +
                 $"Your HP: [green]{player.Resources?.Hp}[/]/{player.Resources?.MaxHp}");
 
             round++;
+            Console.WriteLine();
         }
 
         _dbContext.SaveChanges();
 
+        if (fled) return;
+
         if ((npc.Resources?.Hp ?? 0) <= 0)
         {
-            AnsiConsole.MarkupLine($"\n  [green]{npc.Name} defeated![/]");
+            AnsiConsole.MarkupLine($"\n  [green bold]{Markup.Escape(npc.Name)} defeated![/]");
             if (npc.Inventory is not null)
             {
                 Console.Write("  Loot body? (y/n): ");
@@ -3114,7 +3193,7 @@ public class GameEngine
         }
         else
         {
-            AnsiConsole.MarkupLine("\n  [red]You were defeated![/] Resting at 1 HP.");
+            AnsiConsole.MarkupLine("\n  [red bold]You were defeated![/] Resting at 1 HP.");
             if (player.Resources is not null) player.Resources.Hp = 1;
             _dbContext.SaveChanges();
         }
