@@ -38,6 +38,7 @@ public class ConsoleGameUi : IGameUi
         Console.WriteLine(" 6. Magic          ▶");
         Console.WriteLine(" 7. Inventory      ▶");
         Console.WriteLine(" 8. Chests & Loot  ▶");
+        Console.WriteLine(" 9. Bookshelves    ▶");
         Console.WriteLine(" 0. Exit");
         Console.Write("\nEnter choice: ");
         return Console.ReadLine()?.Trim() ?? string.Empty;

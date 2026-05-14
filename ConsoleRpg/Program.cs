@@ -18,6 +18,7 @@ while (running)
         case "6": Startup.GameEngine.MagicSubmenu(); break;
         case "7": Startup.GameEngine.InventoryMenu(); break;
         case "8": Startup.GameEngine.ChestMenu(); break;
+        case "9": Startup.GameEngine.BookshelfMenu(); break;
         case "0":
             running = false;
             Startup.GameUi.DisplayMessage("Goodbye, adventurer!");

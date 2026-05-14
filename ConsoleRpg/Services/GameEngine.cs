@@ -1440,6 +1440,51 @@ public class GameEngine
     }
 
     // -------------------------------------------------------------------------
+    // W15 Phase F2 — Bookshelf (read lore tomes in current room)
+    // -------------------------------------------------------------------------
+
+    public void BookshelfMenu()
+    {
+        var player = ResolveActiveOrPrompt("browse bookshelves for");
+        if (player is null) return;
+        if (player.Room is null) { Console.WriteLine("\nNot in any room."); return; }
+
+        var bookshelves = _dbContext.QueryContainers()
+            .OfType<Bookshelf>()
+            .Where(b => b.RoomId == player.RoomId)
+            .ToList();
+
+        Console.WriteLine($"\n--- Bookshelves in {player.Room.Name} ---");
+        if (!bookshelves.Any()) { Console.WriteLine("  (none in this room)"); return; }
+
+        for (int i = 0; i < bookshelves.Count; i++)
+            Console.WriteLine($"  {i + 1}. {bookshelves[i].Name}");
+
+        Console.Write("Select bookshelf #: ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int shelfIdx) || shelfIdx < 1 || shelfIdx > bookshelves.Count)
+        { Console.WriteLine("Invalid selection."); return; }
+
+        var shelf = bookshelves[shelfIdx - 1];
+        var tomes = shelf.ItemsCollection.OfType<Tome>().ToList();
+
+        Console.WriteLine($"\n--- {shelf.Name} ---");
+        if (shelf.Description.Length > 0) Console.WriteLine($"  {shelf.Description}");
+        if (!tomes.Any()) { Console.WriteLine("  (empty)"); return; }
+
+        for (int i = 0; i < tomes.Count; i++)
+            Console.WriteLine($"  {i + 1}. {tomes[i].Name}");
+
+        Console.Write("Select tome # to read (0 to cancel): ");
+        if (!int.TryParse(Console.ReadLine()?.Trim(), out int tomeIdx) || tomeIdx < 1 || tomeIdx > tomes.Count)
+        { return; }
+
+        var tome = tomes[tomeIdx - 1];
+        Console.WriteLine($"\n=== {tome.Name} ===");
+        Console.WriteLine(tome.LoreText);
+        Console.WriteLine("===================");
+    }
+
+    // -------------------------------------------------------------------------
     // W13 — Chest & Monster Loot Interaction (any character)
     // -------------------------------------------------------------------------
 

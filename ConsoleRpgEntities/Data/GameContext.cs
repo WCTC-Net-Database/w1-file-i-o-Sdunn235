@@ -105,7 +105,8 @@ public class GameContext : DbContext, IContext
             .HasValue<Armor>("Armor")
             .HasValue<Shield>("Shield")
             .HasValue<Consumable>("Consumable")
-            .HasValue<LockedJournal>("LockedJournal");
+            .HasValue<LockedJournal>("LockedJournal")
+            .HasValue<Tome>("Tome");
 
         // --- Container TPH ---
         // W14 Phase C.1: Room joins Inventory/Equipment/Chest under the
@@ -119,7 +120,8 @@ public class GameContext : DbContext, IContext
             .HasValue<Inventory>("Inventory")
             .HasValue<Equipment>("Equipment")
             .HasValue<Chest>("Chest")           // W13
-            .HasValue<Room>("Room");            // W14 Phase C.1
+            .HasValue<Room>("Room")             // W14 Phase C.1
+            .HasValue<Bookshelf>("Bookshelf");  // W15 Phase F2
 
         // W13 — Chest → Room (many-to-one, nullable).
         // W14 Phase C.1: changed from SetNull to NoAction. After Room joined
@@ -133,6 +135,14 @@ public class GameContext : DbContext, IContext
             .HasOne(c => c.Room)
             .WithMany()
             .HasForeignKey(c => c.RoomId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // Bookshelf → Room (many-to-one, nullable). Same NoAction rationale as
+        // Chest→Room: avoids SQL Server multiple-cascade-paths error.
+        modelBuilder.Entity<Bookshelf>()
+            .HasOne(b => b.Room)
+            .WithMany()
+            .HasForeignKey(b => b.RoomId)
             .OnDelete(DeleteBehavior.NoAction);
 
         // Container → Items (one-to-many, nullable: items can float)
