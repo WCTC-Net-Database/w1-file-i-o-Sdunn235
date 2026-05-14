@@ -2687,6 +2687,113 @@ public class GameEngine
     // Letters a,b,c... map to indices 0,1,2... Rebuilt every loop tick.
     private readonly List<object> _roomObjects = new();
 
+    private void DrawMiniMap(Character player)
+    {
+        // Load all rooms that have been placed on the grid.
+        var rooms = _dbContext.Containers.OfType<Room>()
+            .Where(r => r.GridX != null && r.GridY != null)
+            .ToList();
+
+        if (!rooms.Any())
+        {
+            Console.WriteLine("\n  (No rooms have grid coordinates set.)");
+            return;
+        }
+
+        int minX = rooms.Min(r => r.GridX!.Value);
+        int maxX = rooms.Max(r => r.GridX!.Value);
+        int minY = rooms.Min(r => r.GridY!.Value);
+        int maxY = rooms.Max(r => r.GridY!.Value);
+
+        int cols = maxX - minX + 1;
+        int rows = maxY - minY + 1;
+
+        // Build a lookup: (col, row) → Room
+        var grid = rooms.ToDictionary(r => (r.GridX!.Value - minX, r.GridY!.Value - minY));
+
+        // Load all doors so we can draw connections.
+        var doors = _dbContext.Doors.ToList();
+
+        // Helper: true if two grid-adjacent rooms share a door.
+        bool HasDoor(Room? a, Room? b)
+        {
+            if (a is null || b is null) return false;
+            return doors.Any(d =>
+                (d.RoomAId == a.Id && d.RoomBId == b.Id) ||
+                (d.RoomAId == b.Id && d.RoomBId == a.Id));
+        }
+
+        // Abbreviate room name to 5 chars.
+        static string Abbr(string name)
+        {
+            var words = name.Split(' ');
+            if (words.Length == 1) return name.Length <= 5 ? name : name[..5];
+            return string.Concat(words.Select(w => w.Length > 0 ? char.ToUpper(w[0]).ToString() : ""));
+        }
+
+        // Build map as a list of text lines.
+        var sb = new System.Text.StringBuilder();
+
+        for (int row = 0; row < rows; row++)
+        {
+            // Top border of room row
+            var topLine    = new System.Text.StringBuilder();
+            var midLine    = new System.Text.StringBuilder();
+            var botLine    = new System.Text.StringBuilder();
+            var connLine   = new System.Text.StringBuilder(); // vertical connector row between grid rows
+
+            for (int col = 0; col < cols; col++)
+            {
+                grid.TryGetValue((col, row), out var room);
+                grid.TryGetValue((col, row + 1), out var roomBelow);
+                grid.TryGetValue((col + 1, row), out var roomRight);
+
+                bool hConn = HasDoor(room, roomRight);
+                bool vConn = HasDoor(room, roomBelow);
+
+                if (room is not null)
+                {
+                    bool isCurrent = room.Id == player.RoomId;
+                    string abbr = isCurrent ? $"*{Abbr(room.Name)}*" : Abbr(room.Name);
+                    abbr = abbr.Length > 5 ? abbr[..5] : abbr.PadLeft((5 + abbr.Length) / 2).PadRight(5);
+
+                    topLine.Append($"┌─{abbr[..Math.Min(3, abbr.Length)].PadRight(3)}─┐");
+                    midLine.Append($"│ {abbr.PadRight(5)} │");
+                    botLine.Append($"└─────┘");
+                    connLine.Append(vConn ? "   │   " : "       ");
+                }
+                else
+                {
+                    topLine.Append("       ");
+                    midLine.Append("       ");
+                    botLine.Append("       ");
+                    connLine.Append("       ");
+                }
+
+                // Horizontal connector (between this cell and right neighbor)
+                string hLink = (col < cols - 1 && hConn) ? "─" : " ";
+                topLine.Append(hLink);
+                midLine.Append(hLink);
+                botLine.Append(hLink);
+                connLine.Append(" ");
+            }
+
+            sb.AppendLine(topLine.ToString());
+            sb.AppendLine(midLine.ToString());
+            sb.AppendLine(botLine.ToString());
+            if (row < rows - 1)
+                sb.AppendLine(connLine.ToString());
+        }
+
+        AnsiConsole.Write(new Panel(sb.ToString().TrimEnd())
+        {
+            Header = new PanelHeader("[yellow bold] World Map [/]"),
+            Border = BoxBorder.Rounded,
+        });
+
+        Console.WriteLine($"\n  * = your location ({player.Room?.Name ?? "?"})");
+    }
+
     public void PlayerLoop()
     {
         var player = _activeCharacter!;
@@ -2708,6 +2815,7 @@ public class GameEngine
 
             if (input == "q") { playing = false; break; }
             if (input == "i") { InventoryMenu(); continue; }
+            if (input == "m") { Console.Clear(); DrawMiniMap(player); _gameUi.PauseAndClear(); continue; }
             if (input == "x") { InspectRoomForSecrets(player); _gameUi.PauseAndClear(); continue; }
 
             if (int.TryParse(input, out int exitIdx))
@@ -2817,7 +2925,7 @@ public class GameEngine
         if (!anything)
             Console.WriteLine("    (nothing here)");
 
-        Console.WriteLine("\n  [#] move  [letter] interact  [i] inventory  [x] inspect  [q] quit");
+        Console.WriteLine("\n  [#] move  [letter] interact  [i] inventory  [m] map  [x] inspect  [q] quit");
     }
 
     private void TakeExitByIndex(Character player, int exitIdx)

@@ -37,6 +37,12 @@ public class Room : Container
     /// <c>Room_Description</c> to avoid colliding with <c>Chest.Description</c>.</summary>
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>Grid column for the mini-map. Null for rooms not yet placed on the grid.</summary>
+    public int? GridX { get; set; }
+
+    /// <summary>Grid row for the mini-map. Null for rooms not yet placed on the grid.</summary>
+    public int? GridY { get; set; }
+
     /// <summary>Characters currently located in this room. Maintained via
     /// <c>Character.RoomId</c> back-reference.</summary>
     public virtual ICollection<Character> Characters { get; set; } = new List<Character>();
